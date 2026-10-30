@@ -404,6 +404,7 @@ function analyze(e,r,d,rd){
 
 // ---------- Detailblatt ----------
 let detailId=null;
+let garminCache={};
 async function openDetail(id){
   const e=byId(id); if(!e) return;
   detailId=id; $("#backdrop").hidden=false; $("#sheet").hidden=false; $("#sheet").scrollTop=0;
@@ -455,7 +456,14 @@ function paintDetail(){
 function closeSheet(){$("#sheet").hidden=true;$("#backdrop").hidden=true;detailId=null}
 
 // ---------- Verbindung ----------
-function setupCode(){return btoa(JSON.stringify({i:cfg.clientId,s:cfg.clientSecret,r:cfg.refreshToken}))}
+function setupCode(){return btoa(JSON.stringify({i:cfg.clientId,s:cfg.clientSecret,r:cfg.refreshToken,gu:cfg.garminUrl||undefined,gk:cfg.garminKey||undefined}))}
+const garminOn=()=>!!(cfg.garminUrl&&cfg.garminKey);
+async function garmin(path){
+  const r=await fetch(cfg.garminUrl.replace(/\/$/,"")+path,{headers:{"X-App-Key":cfg.garminKey}});
+  const j=await r.json().catch(()=>null);
+  if(!r.ok) throw {status:r.status,msg:(j&&j.error)||("Garmin-Fehler "+r.status)};
+  return j;
+}
 function openConnection(){
   $("#backdrop").hidden=false;$("#sheet").hidden=false;detailId=null;
   $("#sheetInner").innerHTML=`<div class="grab"></div><div class="top"><h2>Strava</h2><button class="btn ghost" id="closeSheet">Schliessen</button></div>
@@ -463,8 +471,15 @@ function openConnection(){
     <button class="btn" id="refreshBtn">Jetzt aktualisieren</button>
     <div class="panel"><h3>Einrichtungscode</h3><p class="note">Damit verbindest du die App auf dem Home-Bildschirm oder einem anderen Gerät, ohne dich neu anzumelden. Behandle ihn wie ein Passwort.</p>
       <textarea readonly id="codeOut">${setupCode()}</textarea><button class="btn ghost" id="copyBtn">Code kopieren</button></div>
+    <div class="panel"><h3>Garmin</h3><p class="note">Adresse deines Cloudflare-Workers und der App-Schlüssel, den du dort als APP_KEY hinterlegt hast.</p>
+      <div class="field"><label for="gUrl">Worker-Adresse</label><input type="text" id="gUrl" autocomplete="off" placeholder="https://….workers.dev" value="${esc(cfg.garminUrl||"")}"></div>
+      <div class="field"><label for="gKey">App-Schlüssel</label><input type="password" id="gKey" autocomplete="off" value="${esc(cfg.garminKey||"")}"></div>
+      <button class="btn ghost" id="gSave">Speichern und testen</button><p class="note" id="gMsg">${garminOn()?"Garmin ist eingerichtet.":""}</p></div>
     <button class="btn ghost" id="logoutBtn" style="border-color:var(--bad);color:var(--bad)">Verbindung trennen</button>`;
   $("#closeSheet").onclick=closeSheet;
+  $("#gSave").onclick=async()=>{cfg.garminUrl=$("#gUrl").value.trim();cfg.garminKey=$("#gKey").value.trim();saveCfg();const m=$("#gMsg");
+    if(!garminOn()){m.textContent="Garmin ist ausgeschaltet.";return}
+    m.textContent="Teste Verbindung …";try{await garmin("/ping");m.textContent="Verbunden mit Garmin.";garminCache={};if(detailId)paintDetail()}catch(e){m.textContent=e.msg||"Worker nicht erreichbar. Adresse prüfen."}};
   $("#refreshBtn").onclick=()=>{closeSheet();sync(true)};
   $("#copyBtn").onclick=async()=>{try{await navigator.clipboard.writeText(setupCode());toast("Code kopiert")}catch(e){const t=$("#codeOut");t.focus();t.select()}};
   $("#logoutBtn").onclick=()=>{if($("#logoutBtn").dataset.sure){cfg={};store.del("cfg");idb.set("cfg",{});store.del("acts");store.del("details");state.acts=[];state.details={};state.syncedAt=null;closeSheet();renderSync();render()}
@@ -492,7 +507,7 @@ function bindSetup(){
   };
   $("#codeBtn").onclick=()=>{
     try{const o=JSON.parse(atob($("#codeIn").value.trim()));if(!o.i||!o.s||!o.r) throw 0;
-      cfg={clientId:String(o.i),clientSecret:o.s,refreshToken:o.r};saveCfg();afterConnect("ok")}
+      cfg={clientId:String(o.i),clientSecret:o.s,refreshToken:o.r,garminUrl:o.gu,garminKey:o.gk};saveCfg();afterConnect("ok")}
     catch(e){toast("Dieser Code ist ungültig.")}
   };
 }
