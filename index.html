@@ -172,6 +172,10 @@ function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTim
 const state={acts:store.get("acts",[]),details:store.get("details",{}),syncedAt:store.get("syncedAt",null),sync:"idle",syncMsg:"",
   calcT:store.get("calcT",4380),calcEco:store.get("calcEco",null),chart:store.get("chart","vam")};
 let cfg=store.get("cfg",{});
+const idb={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{const r=indexedDB.open("staubern",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))},
+  async get(k){try{const d=await this.open();return await new Promise((res,rej)=>{const q=d.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}catch(e){return undefined}},
+  async set(k,v){try{const d=await this.open();await new Promise((res,rej)=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error)})}catch(e){}}};
+function saveCfg(){store.set("cfg",cfg);idb.set("cfg",JSON.parse(JSON.stringify(cfg)))}
 const connected=()=>!!cfg.refreshToken;
 
 // ---------- Strava ----------
@@ -182,7 +186,7 @@ async function tokenRequest(params){
   if(!r.ok) throw {status:r.status,msg:j.message||"Anmeldung abgelehnt"};
   return j;
 }
-function saveTokens(j){cfg={...cfg,accessToken:j.access_token,refreshToken:j.refresh_token||cfg.refreshToken,expiresAt:j.expires_at,athlete:j.athlete?(j.athlete.firstname||""):cfg.athlete};store.set("cfg",cfg)}
+function saveTokens(j){cfg={...cfg,accessToken:j.access_token,refreshToken:j.refresh_token||cfg.refreshToken,expiresAt:j.expires_at,athlete:j.athlete?(j.athlete.firstname||""):cfg.athlete};saveCfg()}
 async function accessToken(){
   if(cfg.accessToken&&cfg.expiresAt&&cfg.expiresAt-120>Date.now()/1000) return cfg.accessToken;
   const j=await tokenRequest({client_id:cfg.clientId,client_secret:cfg.clientSecret,grant_type:"refresh_token",refresh_token:cfg.refreshToken});
@@ -194,7 +198,7 @@ async function api(path,params={}){
   for(const[k,v] of Object.entries(params)) u.searchParams.set(k,v);
   u.searchParams.set("access_token",tok);
   const r=await fetch(u);
-  if(r.status===401){cfg.accessToken=null;store.set("cfg",cfg);throw {status:401,msg:"Strava-Zugang abgelaufen. Bitte neu verbinden."}}
+  if(r.status===401){cfg.accessToken=null;saveCfg();throw {status:401,msg:"Strava-Zugang abgelaufen. Bitte neu verbinden."}}
   if(r.status===429) throw {status:429,msg:"Strava-Limit erreicht. In 15 Minuten erneut versuchen."};
   if(!r.ok) throw {status:r.status,msg:"Strava antwortet mit Fehler "+r.status+"."};
   return r.json();
@@ -463,7 +467,7 @@ function openConnection(){
   $("#closeSheet").onclick=closeSheet;
   $("#refreshBtn").onclick=()=>{closeSheet();sync(true)};
   $("#copyBtn").onclick=async()=>{try{await navigator.clipboard.writeText(setupCode());toast("Code kopiert")}catch(e){const t=$("#codeOut");t.focus();t.select()}};
-  $("#logoutBtn").onclick=()=>{if($("#logoutBtn").dataset.sure){cfg={};store.del("cfg");store.del("acts");store.del("details");state.acts=[];state.details={};state.syncedAt=null;closeSheet();renderSync();render()}
+  $("#logoutBtn").onclick=()=>{if($("#logoutBtn").dataset.sure){cfg={};store.del("cfg");idb.set("cfg",{});store.del("acts");store.del("details");state.acts=[];state.details={};state.syncedAt=null;closeSheet();renderSync();render()}
     else{$("#logoutBtn").dataset.sure="1";$("#logoutBtn").textContent="Wirklich trennen? Nochmals tippen"}};
 }
 async function finishOAuth(){
@@ -479,7 +483,7 @@ async function finishOAuth(){
 function bindSetup(){
   const btn=$("#connectBtn"); if(!btn) return;
   btn.onclick=async()=>{
-    cfg.clientId=$("#cid").value.trim(); cfg.clientSecret=$("#csec").value.trim(); store.set("cfg",cfg);
+    cfg.clientId=$("#cid").value.trim(); cfg.clientSecret=$("#csec").value.trim(); saveCfg();
     if(!cfg.clientId||!cfg.clientSecret){$("#setupMsg").textContent="Bitte Client ID und Client Secret eingeben.";return}
     if(new URLSearchParams(location.search).get("code")){btn.disabled=true;const res=await finishOAuth();btn.disabled=false;afterConnect(res);return}
     const u=new URL("https://www.strava.com/oauth/authorize");
@@ -488,7 +492,7 @@ function bindSetup(){
   };
   $("#codeBtn").onclick=()=>{
     try{const o=JSON.parse(atob($("#codeIn").value.trim()));if(!o.i||!o.s||!o.r) throw 0;
-      cfg={clientId:String(o.i),clientSecret:o.s,refreshToken:o.r};store.set("cfg",cfg);afterConnect("ok")}
+      cfg={clientId:String(o.i),clientSecret:o.s,refreshToken:o.r};saveCfg();afterConnect("ok")}
     catch(e){toast("Dieser Code ist ungültig.")}
   };
 }
@@ -522,6 +526,9 @@ document.addEventListener("keydown",ev=>{if(ev.key==="Escape")closeSheet()});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&connected()&&(!state.syncedAt||Date.now()-state.syncedAt>10*60e3))sync(false)});
 
 (async()=>{
+  if(!connected()){const c=await idb.get("cfg");if(c&&c.refreshToken){cfg=c;store.set("cfg",cfg)}}
+  else idb.set("cfg",JSON.parse(JSON.stringify(cfg)));
+  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
   render(); renderSync();
   const res=await finishOAuth();
   if(res) afterConnect(res);
