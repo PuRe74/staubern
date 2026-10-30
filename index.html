@@ -406,9 +406,7 @@ function analyze(e,r,d,rd){
     else if(gc.load7<gr.load7*0.7&&gr.load7-gc.load7>100) gut.push(`Ausgeruhter gestartet: Trainingslast der 7 Tage davor ${Math.round(gc.load7)} statt ${Math.round(gr.load7)}.`);
   }
   if(gc&&gc.daysSince!=null&&gc.daysSince<2.5) ctx.push(`Nur ${nf(gc.daysSince,1)} Tage seit der letzten harten Einheit.`);
-  if(gc&&gc.rhr&&gc.rhrMed&&gc.rhr>=gc.rhrMed+5) ctx.push(`Ruhepuls am Tag erhöht: ${gc.rhr} statt üblich ${gc.rhrMed}.`);
-  if(gc&&gc.bbMax!=null&&gc.bbMax<=35) ctx.push(`Body Battery tief: höchstens ${gc.bbMax} an diesem Tag.`);
-  if(ctx.length&&total>30) next="Vor dem nächsten Bestzeitversuch zwei ruhige Tage einplanen und den Ruhepuls prüfen. "+next;
+  if(ctx.length&&total>30) next="Vor dem nächsten Bestzeitversuch zwei ruhige Tage einplanen. "+next;
   return {fazit,gut,verloren,next,ctx};
 }
 
@@ -463,7 +461,7 @@ function tagesform(e,r){
     <div><div class="k">Seit harter Einheit</div><div class="v">${gc.daysSince!=null?nf(gc.daysSince,1)+" T":"–"}</div></div>
     <div><div class="k">Aerober TE</div><div class="v">${gc.ga&&gc.ga.ate!=null?nf(gc.ga.ate,1):"–"}</div></div>
     <div><div class="k">Trainingslast</div><div class="v">${gc.ga&&gc.ga.load!=null?Math.round(gc.ga.load):"–"}</div></div>
-  </div>${gc.ga?zoneBar(gc.ga.z):""}<p class="note" style="margin-top:6px">Ruhepuls und Body Battery gibt es nur für Tage, an denen die Uhr getragen wurde. Last 7 Tage: Summe der Garmin-Trainingslast aller Einheiten davor.</p></div>`;
+  </div>${gc.ga?zoneBar(gc.ga.z):""}<p class="note" style="margin-top:6px">Ruhepuls und Body Battery misst Garmin bei dir nur tagsüber, darum fliessen sie nicht in die Analyse ein. Last 7 Tage: Summe der Garmin-Trainingslast aller Einheiten davor.</p></div>`;
 }
 async function openDetail(id){
   const e=byId(id); if(!e) return;
