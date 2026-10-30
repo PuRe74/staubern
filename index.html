@@ -217,6 +217,7 @@ async function sync(manual){
     state.sync="live"; if(manual) toast("Aktualisiert");
   }catch(e){state.sync="warn";state.syncMsg=e.msg||"Keine Verbindung zu Strava."; if(manual) toast(state.syncMsg)}
   renderSync(); render(); if(detailId) paintDetail();
+  syncGarmin();
 }
 async function detail(id){
   if(state.details[id]) return state.details[id];
@@ -399,12 +400,71 @@ function analyze(e,r,d,rd){
   if(hr&&hr>LT) next=`Der Ø-Puls lag mit ${Math.round(hr)} über der Schwelle von ${LT}. Unten kontrollierter starten und bis zur Abzweigung höchstens ${LT-6} bpm halten.`;
   else if(worst) next=`Im Abschnitt ${worst.name} auf ${fmtMS(worst.rt)} zielen wie bei ${ref.label}${worst.hrd!=null&&worst.hrd<=-2?"; der Puls lässt dort Spielraum":worst.rstop!=null&&worst.stop-worst.rstop>=20?" und Stopps dort kurz halten":""}.`;
   else next=`Das Tempo passt. Im oberen Teil den Puls bis ${LT+2} steigen lassen, um weitere Sekunden zu holen.`;
-  return {fazit,gut,verloren,next};
+  const ctx=[], gc=gContext(e), gr=gContext(ref);
+  if(gc&&gr){
+    if(gc.load7>gr.load7*1.3&&gc.load7-gr.load7>100) ctx.push(`Mehr Belastung in den 7 Tagen davor: Trainingslast ${Math.round(gc.load7)} statt ${Math.round(gr.load7)} vor ${ref.label}.`);
+    else if(gc.load7<gr.load7*0.7&&gr.load7-gc.load7>100) gut.push(`Ausgeruhter gestartet: Trainingslast der 7 Tage davor ${Math.round(gc.load7)} statt ${Math.round(gr.load7)}.`);
+  }
+  if(gc&&gc.daysSince!=null&&gc.daysSince<2.5) ctx.push(`Nur ${nf(gc.daysSince,1)} Tage seit der letzten harten Einheit.`);
+  if(gc&&gc.rhr&&gc.rhrMed&&gc.rhr>=gc.rhrMed+5) ctx.push(`Ruhepuls am Tag erhöht: ${gc.rhr} statt üblich ${gc.rhrMed}.`);
+  if(gc&&gc.bbMax!=null&&gc.bbMax<=35) ctx.push(`Body Battery tief: höchstens ${gc.bbMax} an diesem Tag.`);
+  if(ctx.length&&total>30) next="Vor dem nächsten Bestzeitversuch zwei ruhige Tage einplanen und den Ruhepuls prüfen. "+next;
+  return {fazit,gut,verloren,next,ctx};
 }
 
 // ---------- Detailblatt ----------
 let detailId=null;
 let garminCache={};
+// ---------- Garmin ----------
+const GSTART="2026-05-01";
+state.gacts=store.get("gacts",[]); state.gdays=store.get("gdays",{});
+const ymd=d=>d.toISOString().slice(0,10);
+const tLocal=s=>new Date(String(s).slice(0,19)+"Z").getTime();
+async function syncGarmin(){
+  if(!garminOn()||state.gbusy) return; state.gbusy=true;
+  try{
+    let all=[];
+    for(let s=0;s<500;s+=100){const b=await garmin(`/activitylist-service/activities/search/activities?start=${s}&limit=100&startDate=${GSTART}`);if(!Array.isArray(b))break;all=all.concat(b);if(b.length<100)break}
+    state.gacts=all.map(a=>({id:a.activityId,start:String(a.startTimeLocal||"").replace(" ","T").slice(0,19),type:(a.activityType&&a.activityType.typeKey)||"",load:a.activityTrainingLoad??null,ate:a.aerobicTrainingEffect??null,ante:a.anaerobicTrainingEffect??null,z:[1,2,3,4,5].map(i=>a["hrTimeInZone_"+i]??null),bb:a.differenceBodyBattery??null,resp:a.avgRespirationRate??null}));
+    store.set("gacts",state.gacts);
+    const have=Object.keys(state.gdays).sort(), start=new Date(GSTART+"T12:00:00Z"), to=new Date();
+    let a=have.length?new Date(have[have.length-1]+"T12:00:00Z"):start; a.setUTCDate(a.getUTCDate()-3); if(a<start)a=start;
+    for(;a<=to;a.setUTCDate(a.getUTCDate()+28)){
+      const b=new Date(a);b.setUTCDate(b.getUTCDate()+27);if(b>to)b.setTime(to.getTime());
+      const r=await garmin(`/usersummary-service/v2/dailysummaries?startDate=${ymd(a)}&endDate=${ymd(b)}`);
+      for(const x of (r&&r.data)||[]) state.gdays[x.calendarDate]={rhr:x.heartRate?.restingValue??null,bbMax:x.bodyBattery?.maxValue??null,bbMin:x.bodyBattery?.minValue??null,stress:(x.stress&&x.stress.avgLevel>=0)?x.stress.avgLevel:null};
+    }
+    store.set("gdays",state.gdays); state.gerr=null;
+  }catch(e){state.gerr=e.msg||"Garmin nicht erreichbar"}
+  state.gbusy=false; if(detailId) paintDetail();
+}
+function gContext(e){
+  if(!garminOn()||(!state.gacts.length&&!Object.keys(state.gdays).length)) return null;
+  const t0=tLocal(e.start);
+  const m=state.gacts.map(a=>({a,d:Math.abs(tLocal(a.start)-t0)})).sort((x,y)=>x.d-y.d)[0];
+  const ga=m&&m.d<20*60e3?m.a:null;
+  const before=state.gacts.filter(a=>{const t=tLocal(a.start);return t<t0-60e3&&t>=t0-7*864e5});
+  const load7=before.reduce((s,a)=>s+(a.load||0),0);
+  const hard=state.gacts.filter(a=>tLocal(a.start)<t0-60e3&&((a.load||0)>=150||(a.ate||0)>=4)).sort((x,y)=>y.start.localeCompare(x.start))[0];
+  const daysSince=hard?(t0-tLocal(hard.start))/864e5:null;
+  const day=state.gdays[e.date]||{};
+  const rhrs=Object.values(state.gdays).map(d=>d.rhr).filter(Boolean).sort((a,b)=>a-b);
+  return {ga,load7,daysSince,rhr:day.rhr??null,rhrMed:rhrs.length?rhrs[Math.floor(rhrs.length/2)]:null,bbMax:day.bbMax??null};
+}
+function zoneBar(z){const tot=z.reduce((s,v)=>s+(v||0),0);if(!tot)return "";
+  return `<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;margin-top:10px">${z.map((v,i)=>`<span style="width:${(v||0)/tot*100}%;background:${ZONES[i][5]}"></span>`).join("")}</div><p class="note" style="margin-top:4px">Zeit in Zonen laut Uhr: ${z.map((v,i)=>v>30?`Z${i+1} ${fmtMS(v)}`:"").filter(Boolean).join(" · ")}</p>`}
+function tagesform(e,r){
+  const gc=gContext(e); if(!gc) return garminOn()&&state.gbusy?`<p class="note"><span class="pulse"></span>Garmin-Daten werden geladen …</p>`:"";
+  const gr=r?gContext(r.ref):null;
+  return `<div><h3 style="margin-bottom:6px">Tagesform <span class="note" style="font-family:var(--f-body);font-weight:400">aus Garmin</span></h3><div class="kv">
+    <div><div class="k">Ruhepuls</div><div class="v">${gc.rhr??"–"}${gc.rhrMed?` <span class="note">Ø ${gc.rhrMed}</span>`:""}</div></div>
+    <div><div class="k">Body Battery max.</div><div class="v">${gc.bbMax??"–"}</div></div>
+    <div><div class="k">Last 7 Tage</div><div class="v">${Math.round(gc.load7)}${gr?` <span class="note">${esc(r.ref.label)} ${Math.round(gr.load7)}</span>`:""}</div></div>
+    <div><div class="k">Seit harter Einheit</div><div class="v">${gc.daysSince!=null?nf(gc.daysSince,1)+" T":"–"}</div></div>
+    <div><div class="k">Aerober TE</div><div class="v">${gc.ga&&gc.ga.ate!=null?nf(gc.ga.ate,1):"–"}</div></div>
+    <div><div class="k">Trainingslast</div><div class="v">${gc.ga&&gc.ga.load!=null?Math.round(gc.ga.load):"–"}</div></div>
+  </div>${gc.ga?zoneBar(gc.ga.z):""}<p class="note" style="margin-top:6px">Ruhepuls und Body Battery gibt es nur für Tage, an denen die Uhr getragen wurde. Last 7 Tage: Summe der Garmin-Trainingslast aller Einheiten davor.</p></div>`;
+}
 async function openDetail(id){
   const e=byId(id); if(!e) return;
   detailId=id; $("#backdrop").hidden=false; $("#sheet").hidden=false; $("#sheet").scrollTop=0;
@@ -428,6 +488,7 @@ function paintDetail(){
       coach=`<div class="coach"><h4>Analyse</h4><p class="fazit">${esc(a.fazit)}</p>
         <div class="blk"><i style="background:var(--good)"></i><div><b>Gut</b><ul>${li(a.gut)}</ul></div></div>
         <div class="blk"><i style="background:var(--bad)"></i><div><b>Zeit verloren</b><ul>${li(a.verloren)}</ul></div></div>
+        ${a.ctx.length?`<div class="blk"><i style="background:var(--warn)"></i><div><b>Mögliche Ursachen laut Garmin</b><ul>${li(a.ctx)}</ul></div></div>`:""}
         <div class="blk"><i style="background:var(--glacier)"></i><div><b>Nächstes Mal</b><p>${esc(a.next)}</p></div></div></div>`;}
     const sc=Math.max(60,...rs.map(x=>Math.abs(x.d||0)));
     const table=rs.length?`<div style="overflow-x:auto"><table><thead><tr><th>Abschnitt</th><th class="r">Zeit</th><th class="r">Δ ${r?esc(r.ref.label):""}</th></tr></thead><tbody>${rs.map(x=>{
@@ -450,7 +511,7 @@ function paintDetail(){
       <div><div class="k">Ø / Max HF</div><div class="v">${hr?nf(hr):"–"} / ${hrMax??"–"}</div></div>
       <div><div class="k">Ökonomie</div><div class="v">${nf(eco,2)}</div></div>
       <div><div class="k">Höhenmeter</div><div class="v">${nf(e.hm)}</div></div>
-    </div>${body}`;
+    </div>${tagesform(e,r)}${body}`;
   $("#closeSheet").onclick=closeSheet;
 }
 function closeSheet(){$("#sheet").hidden=true;$("#backdrop").hidden=true;detailId=null}
@@ -479,7 +540,7 @@ function openConnection(){
   $("#closeSheet").onclick=closeSheet;
   $("#gSave").onclick=async()=>{cfg.garminUrl=$("#gUrl").value.trim();cfg.garminKey=$("#gKey").value.trim();saveCfg();const m=$("#gMsg");
     if(!garminOn()){m.textContent="Garmin ist ausgeschaltet.";return}
-    m.textContent="Teste Verbindung …";try{await garmin("/ping");m.textContent="Verbunden mit Garmin.";garminCache={};if(detailId)paintDetail()}catch(e){m.textContent=e.msg||"Worker nicht erreichbar. Adresse prüfen."}};
+    m.textContent="Teste Verbindung …";try{await garmin("/ping");m.textContent="Verbunden mit Garmin.";syncGarmin()}catch(e){m.textContent=e.msg||"Worker nicht erreichbar. Adresse prüfen."}};
   $("#refreshBtn").onclick=()=>{closeSheet();sync(true)};
   $("#copyBtn").onclick=async()=>{try{await navigator.clipboard.writeText(setupCode());toast("Code kopiert")}catch(e){const t=$("#codeOut");t.focus();t.select()}};
   $("#logoutBtn").onclick=()=>{if($("#logoutBtn").dataset.sure){cfg={};store.del("cfg");idb.set("cfg",{});store.del("acts");store.del("details");state.acts=[];state.details={};state.syncedAt=null;closeSheet();renderSync();render()}
