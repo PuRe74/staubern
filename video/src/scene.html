@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Staubern 2026 Video</title>
+<style>
+@font-face{font-family:"BC";src:url("fonts/BarlowCondensed-Bold.ttf");font-weight:700}
+@font-face{font-family:"BC";src:url("fonts/BarlowCondensed-SemiBold.ttf");font-weight:600}
+@font-face{font-family:"PlexMono";src:url("fonts/IBMPlexMono-Medium.ttf");font-weight:500}
+@font-face{font-family:"Plex";src:url("fonts/IBMPlexSans-Medium.ttf");font-weight:500}
+@font-face{font-family:"Plex";src:url("fonts/IBMPlexSans-SemiBold.ttf");font-weight:600}
+html,body{margin:0;background:#0F1613}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<script>
+"use strict";
+// Staubern 2026 Challenge: 20 s, 1080x1920, deterministisch über draw(t).
+const W=1080,H=1920,DUR=20;
+const C={bg:"#0F1613",bg2:"#132019",surface:"#18211D",line:"#2A3631",fg:"#E7EEEA",muted:"#93A39C",
+  fir:"#5BBF95",firDeep:"#1F6B52",glacier:"#7DB8DE",sign:"#F2C200",ink:"#1A1A12",warn:"#E3A43C",red:"#C8312B"};
+const FD='"BC","Arial Narrow",sans-serif', FB='"Plex",sans-serif', FM='"PlexMono",monospace';
+
+// Strava-Daten 2026 (Gesamtzeit in s). c=1: begleitete Tour.
+const ACTS=[["2026-05-05","Staubern with Roger",7061,1],["2026-05-24","Morning Hike",6222,0],["2026-05-25","Morning Hike Vol. 2",5973,0],
+["2026-05-27","V3",5748,0],["2026-06-01","V4",5471,0],["2026-06-16","V5 mit Roland",6078,1],["2026-06-19","V6",5832,0],
+["2026-06-26","V7",5430,0],["2026-06-30","V8",5722,0],["2026-07-07","V9",5242,0],["2026-07-09","V10 mit Martin",8151,1],
+["2026-07-12","V11",4982,0],["2026-07-14","V12",4999,0],["2026-08-07","V13",7046,0],["2026-08-09","V14 Staubern Run",4945,0],
+["2026-08-11","V15",4915,0],["2026-08-23","V16",4727,0],["2026-09-02","V17",4773,0],["2026-09-23","V18",4736,0],
+["2026-10-04","V19",4652,0],["2026-10-13","V20",4520,0],["2026-10-22","V21 Night Hike",4475,0],["2026-10-29","V22 Night Hike",4740,0]];
+const BEST_I=21;
+
+// ---------- Hilfen ----------
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const p=(t,a,b)=>clamp((t-a)/(b-a));
+const eOut=x=>1-Math.pow(1-x,3);
+const eIn=x=>x*x*x;
+const eIO=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const eBack=x=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+const lerp=(a,b,x)=>a+(b-a)*x;
+const fmt=s=>{s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+":"+String(m).padStart(2,"0"):m)+":"+String(x).padStart(2,"0")};
+const thou=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,"'");
+const dDE=d=>{const[y,m,t]=d.split("-");return `${t}.${m}.`};
+let ctx;
+
+function text(s,x,y,{font,size,weight=700,color=C.fg,align="left",base="alphabetic",ls=0,alpha=1}={}){
+  ctx.save();ctx.globalAlpha*=alpha;ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline=base;
+  ctx.font=`${weight} ${size}px ${font||FD}`;if(ls)ctx.letterSpacing=ls+"px";ctx.fillText(s,x,y);ctx.restore();
+}
+function rrect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r)}
+// Gelber Wanderwegweiser (Pfeil nach rechts)
+function signPath(x,y,w,h,tip){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+w-tip,y);ctx.lineTo(x+w,y+h/2);ctx.lineTo(x+w-tip,y+h);ctx.lineTo(x,y+h);ctx.closePath()}
+// weiss-rot-weisse Bergwegmarkierung
+function trailMark(x,y,w,h){ctx.fillStyle="#fff";ctx.fillRect(x,y,w,h);ctx.fillStyle=C.red;ctx.fillRect(x+w/3,y,w/3,h)}
+
+// ---------- Hintergrund ----------
+function ridge(seed,x){return Math.sin(x*.0031+seed)*60+Math.sin(x*.0083+seed*2.1)*28+Math.sin(x*.019+seed*3.7)*11}
+function background(t){
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,"#0C1310");g.addColorStop(.55,C.bg);g.addColorStop(1,"#14231C");
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // Sterne (Nacht-Hikes)
+  for(let i=0;i<70;i++){const sx=(i*397.3)%W, sy=(i*211.7)%900+40, tw=.25+.25*Math.sin(t*2+i);
+    ctx.fillStyle=`rgba(231,238,234,${tw*.35})`;ctx.fillRect(sx,sy,2,2)}
+  const layers=[[1.3,1500,"#13201A",6],[2.9,1640,"#16261F",12],[4.4,1770,"#1A2D24",20]];
+  for(const[seed,base,col,spd] of layers){
+    ctx.beginPath();ctx.moveTo(0,H);
+    for(let x=0;x<=W;x+=12)ctx.lineTo(x,base-ridge(seed,x+t*spd)-(seed===1.3?120*Math.exp(-Math.pow((x-640-t*spd*0)/260,2)):0));
+    ctx.lineTo(W,H);ctx.closePath();ctx.fillStyle=col;ctx.fill();
+  }
+}
+// Story-Fortschritt oben
+const SCENES=[0,3.6,8,13,17,20];
+function chrome(t,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  const x0=60,gap=10,n=5,w=(W-2*x0-gap*(n-1))/n;
+  for(let i=0;i<n;i++){const f=p(t,SCENES[i],SCENES[i+1]);
+    rrect(x0+i*(w+gap),70,w,6,3);ctx.fillStyle="rgba(231,238,234,.18)";ctx.fill();
+    if(f>0){rrect(x0+i*(w+gap),70,w*f,6,3);ctx.fillStyle=C.sign;ctx.fill()}}
+  // Kopfzeile wie in der App
+  ctx.fillStyle=C.sign;signPath(60,112,58,30,10);ctx.fill();
+  text("FRÜMSEN → STAUBERN · 1'221 HM",134,137,{font:FB,size:24,weight:600,color:C.muted,ls:3.5});
+  text("2026",W-60,137,{font:FM,size:24,weight:500,color:C.muted,align:"right"});
+  ctx.restore();
+}
+
+// ---------- Höhenprofil ----------
+const PROF=[[0,0],[.35,60],[1.0,212],[1.3,350],[1.66,510],[2.0,620],[2.35,735],[2.9,880],[3.5,1010],[4.0,1110],[4.42,1180],[4.7,1205],[5.01,1221]];
+function profY(km){for(let i=1;i<PROF.length;i++){if(km<=PROF[i][0]){const[a,b]=[PROF[i-1],PROF[i]];const f=(km-a[0])/(b[0]-a[0]);return a[1]+(b[1]-a[1])*(f*f*(3-2*f))}}return 1221}
+function profile(x0,y0,w,h,f,{fill=true,lw=7,labels=false,alpha=1,hiker=true}={}){
+  ctx.save();ctx.globalAlpha*=alpha;
+  const N=160, pts=[];for(let i=0;i<=N;i++){const km=5.01*i/N;const wig=Math.sin(i*1.7)*4+Math.sin(i*.6)*6;pts.push([x0+w*i/N,y0-h*(profY(km)+(i>0&&i<N?wig:0))/1221])}
+  const last=Math.max(1,Math.floor(N*f));const head=pts[last];
+  if(fill){ctx.beginPath();ctx.moveTo(pts[0][0],y0);for(let i=0;i<=last;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.lineTo(head[0],y0);ctx.closePath();
+    const g=ctx.createLinearGradient(0,y0-h,0,y0);g.addColorStop(0,"rgba(91,191,149,.42)");g.addColorStop(1,"rgba(91,191,149,0)");ctx.fillStyle=g;ctx.fill()}
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<=last;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.strokeStyle=C.fir;ctx.lineWidth=lw;ctx.lineJoin="round";ctx.lineCap="round";ctx.stroke();
+  if(labels){const L=[[1.0,"Abzweigung"],[1.66,"Wadabisser"],[2.35,"Offach Bissa"],[4.42,"Frümser Alp"]];
+    for(const[km,name] of L){const fi=km/5.01;if(f<fi)continue;const a=eOut(p(f,fi,fi+.08));
+      const x=x0+w*fi,y=y0-h*profY(km)/1221;
+      ctx.fillStyle=C.fg;ctx.globalAlpha=alpha*a;ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();
+      ctx.strokeStyle="rgba(231,238,234,.35)";ctx.lineWidth=2;ctx.setLineDash([6,8]);ctx.beginPath();ctx.moveTo(x,y+16);ctx.lineTo(x,y0);ctx.stroke();ctx.setLineDash([]);
+      text(name,x-26,y-24-(1-a)*20,{font:FB,size:28,weight:600,color:C.fg,align:"right",alpha:a});
+      text(thou(profY(km))+" Hm",x-26,y+12-(1-a)*20,{font:FM,size:22,weight:500,color:C.muted,align:"right",alpha:a});
+      ctx.globalAlpha=alpha}}
+  if(hiker&&f<1){ctx.fillStyle=C.sign;ctx.beginPath();ctx.arc(head[0],head[1],14,0,7);ctx.fill();
+    ctx.fillStyle="rgba(242,194,0,.25)";ctx.beginPath();ctx.arc(head[0],head[1],28,0,7);ctx.fill()}
+  ctx.restore();return pts;
+}
+
+// ---------- Szene 1: Titel ----------
+function scene1(t){
+  const out=eIn(p(t,3.25,3.6)), oy=-out*120, oa=1-out;
+  ctx.save();ctx.translate(0,oy);ctx.globalAlpha=oa;
+  // Wegweiser fährt rein
+  const s=eOut(p(t,.35,1.0));const sx=lerp(-1000,60,s);
+  ctx.save();ctx.shadowColor="rgba(0,0,0,.45)";ctx.shadowBlur=40;ctx.shadowOffsetY=16;
+  ctx.fillStyle=C.sign;signPath(sx,320,900,270,100);ctx.fill();ctx.restore();
+  // Pfosten
+  ctx.fillStyle=C.sign;ctx.fillRect(sx+70,590,34,lerp(0,60,eOut(p(t,.7,1.2))));
+  text("STAUBERN",sx+48,555,{size:180,color:C.ink});
+  trailMark(sx+54,346,150,26);
+  text("1 h 14 min",sx+770,375,{font:FB,size:30,weight:600,color:C.ink,align:"right",alpha:p(t,1.4,1.7)});
+  // 2026 CHALLENGE
+  const c=p(t,1.0,1.35), sc=lerp(1.6,1,eOut(c));
+  ctx.save();ctx.translate(90,790);ctx.scale(sc,sc);
+  text("2026",0,0,{size:200,color:C.fg,alpha:c});
+  ctx.restore();
+  const c2=eOut(p(t,1.25,1.6));
+  text("CHALLENGE",90+(1-c2)*80,900,{size:120,weight:600,color:C.sign,ls:14,alpha:c2});
+  text("23 Aufstiege · 05.05. – 29.10.2026",92,980,{font:FB,size:34,weight:500,color:C.muted,alpha:p(t,1.8,2.2)});
+  // Höhenprofil zeichnet sich
+  profile(90,1640,900,500,eIO(p(t,.4,3.0)),{labels:true});
+  ctx.restore();
+}
+
+// ---------- Szene 2: Zahlen ----------
+function scene2(t){
+  const a=p(t,3.6,3.9), out=eIn(p(t,7.7,8.0));
+  ctx.save();ctx.globalAlpha=a*(1-out);ctx.translate(-out*200+(1-eOut(a))*120,0);
+  // Aufstiege
+  const n=Math.round(23*eOut(p(t,3.8,5.0)));
+  text("AUFSTIEGE",90,330,{font:FB,size:30,weight:600,color:C.muted,ls:5});
+  text(String(n),74,660,{size:380,color:C.fg});
+  text("× Frümsen → Staubern",74+ctxW(String(n),380)+30,640,{size:64,weight:600,color:C.fir,alpha:p(t,4.9,5.2)});
+  // Höhenmeter
+  const hb=p(t,5.0,5.1);
+  const hm=28116*eOut(p(t,5.0,6.3));
+  text("HÖHENMETER",90,800,{font:FB,size:30,weight:600,color:C.muted,ls:5,alpha:hb});
+  text(thou(hm),74,1040,{size:260,color:C.sign,alpha:hb});
+  // Everest
+  const e=p(t,6.3,6.5);
+  text("= 3,2 × Mount Everest",90,1170,{size:84,weight:600,color:C.fg,alpha:e});
+  for(let i=0;i<4;i++){
+    const fill=clamp((eOut(p(t,6.45,7.4))*3.18)-i);const bx=90+i*235, by=1520, bw=210, bh=270;
+    const pop=eBack(p(t,6.4+i*.12,6.7+i*.12));
+    ctx.save();ctx.translate(bx+bw/2,by);ctx.scale(pop,pop);ctx.translate(-bx-bw/2,-by);
+    ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+bw/2,by-bh);ctx.lineTo(bx+bw,by);ctx.closePath();
+    ctx.strokeStyle="rgba(231,238,234,.35)";ctx.lineWidth=4;ctx.stroke();
+    if(fill>0){ctx.save();ctx.clip();ctx.fillStyle=C.firDeep;ctx.fillRect(bx,by-bh*fill,bw,bh*fill);
+      ctx.fillStyle="#E6EEEA";ctx.fillRect(bx,by-bh,bw,bh*.22*(fill>.8?1:0));ctx.restore()}
+    ctx.restore();
+  }
+  text("Je 8'849 m · 124 km · 35 h unterwegs",90,1600,{font:FB,size:32,weight:500,color:C.muted,alpha:p(t,7.0,7.3)});
+  ctx.restore();
+}
+function ctxW(s,size){ctx.save();ctx.font=`700 ${size}px ${FD}`;const w=ctx.measureText(s).width;ctx.restore();return w}
+
+// ---------- Szene 3: Verlauf ----------
+const T0=Date.UTC(2026,4,1), T1=Date.UTC(2026,10,1);
+function scene3(t){
+  const a=p(t,8.0,8.3), out=eIn(p(t,12.7,13.0));
+  ctx.save();ctx.globalAlpha=a*(1-out);ctx.translate((1-eOut(a))*200,0);
+  text("ZEIT PRO AUFSTIEG",90,270,{font:FB,size:30,weight:600,color:C.muted,ls:5});
+  text("29 Minuten schneller",90,380,{size:110,color:C.fg});
+  // Panel
+  const px=60,py=450,pw=960,ph=980;rrect(px,py,pw,ph,28);ctx.fillStyle="rgba(24,33,29,.92)";ctx.fill();ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.stroke();
+  const gx0=200,gx1=980,gy0=520,gy1=1320, tmin=4200,tmax=8400;
+  const X=d=>{const[y,m,dd]=d.split("-").map(Number);return lerp(gx0,gx1,(Date.UTC(y,m-1,dd)-T0)/(T1-T0))};
+  const Y=s=>lerp(gy0,gy1,(s-tmin)/(tmax-tmin));
+  for(const s of [4800,5400,6300,7200,8100]){const y=Y(s);ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(gx0,y);ctx.lineTo(gx1,y);ctx.stroke();
+    text(fmt(s).slice(0,-3),gx0-24,y+9,{font:FM,size:26,weight:500,color:C.muted,align:"right"})}
+  // Sub-75-Linie
+  {const y=Y(4500);ctx.strokeStyle=C.sign;ctx.lineWidth=3;ctx.setLineDash([14,12]);ctx.beginPath();ctx.moveTo(gx0,y);ctx.lineTo(gx1,y);ctx.stroke();ctx.setLineDash([]);
+    text("1:15",gx0-24,y+9,{font:FM,size:26,weight:500,color:C.sign,align:"right"});text("SUB-75",gx0+250,y-14,{font:FB,size:22,weight:600,color:C.sign,ls:2})}
+  ["Mai","Jun","Jul","Aug","Sep","Okt"].forEach((m,i)=>text(m,X(`2026-${String(5+i).padStart(2,"0")}-15`),1380,{font:FB,size:28,weight:500,color:C.muted,align:"center"}));
+  text("schneller ↑",gx0,500,{font:FB,size:24,weight:600,color:C.fir,alpha:.9});
+  // Punkte nacheinander
+  const shown=eIO(p(t,8.4,11.6))*ACTS.length;
+  const solo=ACTS.map((r,i)=>[i,r]).filter(([,r])=>!r[3]);
+  // Linie durch Solo-Aufstiege
+  ctx.beginPath();let first=true;
+  for(const[i,r] of solo){if(i>=shown)break;const x=X(r[0]),y=Y(r[2]);first?ctx.moveTo(x,y):ctx.lineTo(x,y);first=false}
+  ctx.strokeStyle="rgba(91,191,149,.55)";ctx.lineWidth=4;ctx.lineJoin="round";ctx.stroke();
+  let cur=null;
+  ACTS.forEach((r,i)=>{if(i>=shown)return;const k=eBack(clamp(shown-i));const x=X(r[0]),y=Y(r[2]);cur=[i,r];
+    ctx.beginPath();ctx.arc(x,y,13*k,0,7);
+    if(r[3]){ctx.strokeStyle=C.muted;ctx.lineWidth=4;ctx.stroke()}
+    else{ctx.fillStyle=r[2]<4500?C.sign:r[2]<4800?C.fir:C.glacier;ctx.fill()}});
+  // Bestzeit hervorheben
+  const bp=p(t,11.7,12.0);
+  if(bp>0){const r=ACTS[BEST_I],x=X(r[0]),y=Y(r[2]);
+    for(let k=0;k<2;k++){const rr=20+((t-11.7+k*.35)%0.7)*90;ctx.strokeStyle=`rgba(242,194,0,${.7*(1-(rr-20)/63)})`;ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,y,rr,0,7);ctx.stroke()}
+    ctx.save();ctx.globalAlpha*=eOut(bp);ctx.fillStyle=C.sign;signPath(x-250,y-118,240,64,22);ctx.fill();ctx.restore();
+    text("1:14:35",x-240,y-70,{size:52,color:C.ink,alpha:eOut(bp)})}
+  // Readout
+  if(cur){const[i,r]=cur;
+    rrect(60,1460,960,120,24);ctx.fillStyle="rgba(24,33,29,.92)";ctx.fill();
+    text(`#${i+1}`,100,1538,{size:64,color:C.muted});
+    text(r[1],230,1512,{font:FB,size:32,weight:600,color:C.fg});
+    text(dDE(r[0])+"2026"+(r[3]?" · begleitet":""),230,1556,{font:FB,size:26,weight:500,color:C.muted});
+    text(fmt(r[2]),980,1542,{font:FM,size:54,weight:500,color:r[3]?C.muted:r[2]<4500?C.sign:r[2]<4800?C.fir:C.fg,align:"right"})}
+  // Legende
+  const lg=[[C.glacier,"solo"],[C.fir,"Sub-80"],[C.sign,"Sub-75"],[null,"begleitet"]];let lx=100;
+  for(const[c,l] of lg){ctx.beginPath();ctx.arc(lx,1640,10,0,7);if(c){ctx.fillStyle=c;ctx.fill()}else{ctx.strokeStyle=C.muted;ctx.lineWidth=3;ctx.stroke()}
+    text(l,lx+22,1649,{font:FB,size:26,weight:500,color:C.muted});lx+=50+ctxW2(l)}
+  ctx.restore();
+}
+function ctxW2(s){ctx.save();ctx.font=`500 26px ${FB}`;const w=ctx.measureText(s).width;ctx.restore();return w+40}
+
+// ---------- Szene 4: Bestzeit ----------
+function scene4(t){
+  const out=eIn(p(t,16.7,17.0));
+  ctx.save();ctx.globalAlpha=1-out;ctx.translate(0,-out*140);
+  const a=p(t,13.0,13.45);
+  text("BESTZEIT 2026",90,370,{font:FB,size:32,weight:600,color:C.sign,ls:6,alpha:p(t,13.0,13.2)});
+  const sx=lerp(1100,40,eOut(a));
+  ctx.save();ctx.shadowColor="rgba(0,0,0,.5)";ctx.shadowBlur=50;ctx.shadowOffsetY=20;ctx.fillStyle=C.sign;signPath(sx,420,1000,330,110);ctx.fill();ctx.restore();
+  trailMark(sx+50,450,150,26);
+  const sc=lerp(1.35,1,eBack(p(t,13.15,13.6)));
+  ctx.save();ctx.translate(sx+50,700);ctx.scale(sc,sc);text("1:14:35",0,0,{size:250,color:C.ink});ctx.restore();
+  const b=eOut(p(t,13.6,14.0));
+  text("Staubern V21 · Night Hike",90,860+(1-b)*30,{font:FB,size:46,weight:600,color:C.fg,alpha:b});
+  text("22.10.2026 · 19:39 · klar, 9 °C",90,920+(1-b)*30,{font:FM,size:32,weight:500,color:C.muted,alpha:b});
+  // Kacheln
+  const tiles=[["−29:07","schneller als am 24.05.",C.fir],["982","Hm pro Stunde",C.fg],["7 ×","unter 80 Minuten",C.fir],["1 ×","unter 75 Minuten",C.sign]];
+  tiles.forEach(([v,k,col],i)=>{const st=14.0+i*.5, q=p(t,st,st+.3);if(q<=0)return;const e=eBack(q);
+    const cx=60+(i%2)*490, cy=1010+Math.floor(i/2)*300, w=470, h=270;
+    ctx.save();ctx.globalAlpha*=clamp(q*2);ctx.translate(cx+w/2,cy+h/2);ctx.scale(lerp(.8,1,e),lerp(.8,1,e));ctx.translate(-cx-w/2,-cy-h/2);
+    rrect(cx,cy,w,h,24);ctx.fillStyle="rgba(24,33,29,.95)";ctx.fill();ctx.strokeStyle=i===3?C.sign:C.line;ctx.lineWidth=i===3?4:2;ctx.stroke();
+    text(v,cx+36,cy+160,{size:130,color:col});text(k,cx+38,cy+222,{font:FB,size:30,weight:500,color:C.muted});ctx.restore()});
+  ctx.restore();
+  // Blitz beim Drop
+  const fl=1-p(t,13.0,13.35);if(t>=13.0&&fl>0){ctx.fillStyle=`rgba(242,236,210,${fl*.55})`;ctx.fillRect(0,0,W,H)}
+}
+
+// ---------- Szene 5: Ausblick ----------
+function scene5(t){
+  const a=p(t,17.0,17.4);
+  ctx.save();ctx.globalAlpha=a;
+  text("NÄCHSTES ZIEL",90,360,{font:FB,size:32,weight:600,color:C.muted,ls:6});
+  const sc=lerp(.85,1,eBack(p(t,17.0,17.5)));
+  ctx.save();ctx.translate(80,640);ctx.scale(sc,sc);
+  ctx.font=`700 300px ${FD}`;ctx.lineWidth=6;ctx.strokeStyle=C.sign;ctx.strokeText("1:13:00",0,0);
+  const fill=eIO(p(t,17.5,18.8));ctx.save();ctx.beginPath();ctx.rect(0,-300,900*fill,340);ctx.clip();ctx.fillStyle=C.sign;ctx.fillText("1:13:00",0,0);ctx.restore();
+  ctx.restore();
+  text("noch 1:35 schneller als die Bestzeit",90,740,{font:FB,size:40,weight:500,color:C.fg,alpha:p(t,17.6,17.9)});
+  // Mini-Profil mit Gipfelflagge
+  const pts=profile(90,1500,780,520,1,{fill:true,lw:6,hiker:false,alpha:p(t,17.3,17.8)});
+  const top=pts[pts.length-1], q=eBack(p(t,18.4,18.8));
+  if(q>0){ctx.save();ctx.translate(top[0]-6,top[1]);ctx.scale(q,q);
+    ctx.fillStyle=C.sign;ctx.fillRect(-6,-150,12,150);signPath(-6,-150,170,60,20);ctx.fill();trailMark(14,-130,90,20);ctx.restore()}
+  // Hiker läuft hoch
+  const hf=eIO(p(t,17.4,18.5)), idx=Math.min(pts.length-1,Math.floor(hf*(pts.length-1)));
+  if(hf<1){ctx.fillStyle=C.sign;ctx.beginPath();ctx.arc(pts[idx][0],pts[idx][1],14,0,7);ctx.fill()}
+  const e=eOut(p(t,18.6,19.0));
+  text("Wir sehen uns am Wadabisser.",540,1650+(1-e)*30,{size:68,weight:600,color:C.fg,align:"center",alpha:e});
+  text("Staubern Logbuch · Saison 2026",540,1720+(1-e)*30,{font:FB,size:30,weight:500,color:C.muted,align:"center",alpha:e,ls:2});
+  ctx.restore();
+}
+
+function draw(t){
+  ctx=document.getElementById("c").getContext("2d");
+  ctx.save();
+  // Kamera-Puls auf den Schlägen nach dem Drop
+  background(t);
+  chrome(t,clamp(p(t,.1,.5))*(1-p(t,19.3,19.8)));
+  if(t<3.6)scene1(t); else if(t<8)scene2(t); else if(t<13)scene3(t); else if(t<17)scene4(t); else scene5(t);
+  // Ausblenden
+  const f=p(t,19.4,20);if(f>0){ctx.fillStyle=`rgba(8,12,10,${eIn(f)})`;ctx.fillRect(0,0,W,H)}
+  const fi=1-p(t,0,.3);if(fi>0){ctx.fillStyle=`rgba(8,12,10,${fi})`;ctx.fillRect(0,0,W,H)}
+  ctx.restore();
+}
+window.draw=draw;
+window.ready=document.fonts.load(`700 40px ${FD}`).then(()=>Promise.all([document.fonts.load(`600 40px ${FD}`),document.fonts.load(`500 20px ${FM}`),document.fonts.load(`500 20px ${FB}`),document.fonts.load(`600 20px ${FB}`)])).then(()=>{draw(0);return true});
+</script>
+</body>
+</html>
