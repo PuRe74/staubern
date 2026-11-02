@@ -3,7 +3,7 @@ const { chromium } = require("playwright");
 const fs = require("fs"), path = require("path");
 (async () => {
   const [fontsDir, outDir, fpsArg, only] = process.argv.slice(2);
-  const fps = Number(fpsArg || 30), dur = 20;
+  const fps = Number(fpsArg || 30), dur = 30;
   fs.mkdirSync(outDir, { recursive: true });
   // Seite mit Schriften in ein temporäres Verzeichnis neben die Fonts kopieren
   const work = path.resolve(outDir, "..", "page");
@@ -11,9 +11,12 @@ const fs = require("fs"), path = require("path");
   fs.copyFileSync(path.join(__dirname, "scene.html"), path.join(work, "scene.html"));
   fs.rmSync(path.join(work, "fonts"), { force: true, recursive: true });
   fs.symlinkSync(path.resolve(fontsDir), path.join(work, "fonts"));
+  fs.rmSync(path.join(work, "photos"), { force: true, recursive: true });
+  fs.symlinkSync(path.join(__dirname, "photos"), path.join(work, "photos"));
   const browser = await chromium.launch({ args: ["--allow-file-access-from-files"] });
   const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
   await page.goto("file://" + path.join(work, "scene.html"));
+  page.on("pageerror", e => { console.error(e); process.exit(1); });
   await page.evaluate(() => window.ready);
   const times = only ? only.split(",").map(Number) : [...Array(fps * dur).keys()].map(i => i / fps);
   for (let i = 0; i < times.length; i++) {

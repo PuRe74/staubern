@@ -70,11 +70,35 @@ function background(t){
     ctx.lineTo(W,H);ctx.closePath();ctx.fillStyle=col;ctx.fill();
   }
 }
+// ---------- Fotos (Wikimedia Commons, siehe photos/CREDITS.md) ----------
+const PH=["frumsen","kanzel","alp","first","winter","gasthaus","nebel"], IMG={};
+const loadImgs=()=>Promise.all(PH.map(k=>new Promise((res,rej)=>{const im=new Image();im.onload=()=>{IMG[k]=im;res()};im.onerror=()=>rej(new Error(k));im.src=`photos/${k}.jpg`})));
+// [Start, Ende, Foto, Abdunkelung, Fokus x0→x1, Fokus y, Zoom z0→z1]
+const SHOTS=[[0,4,"frumsen",.18,.52,.58,.6,1.02,1.12],[4,7.6,"kanzel",.5,.5,.5,.45,1.0,1.08],[7.6,12,"alp",.62,.35,.6,.55,1.04,1.12],
+  [12,17,"first",.72,.45,.55,.5,1.02,1.08],[17,21,"winter",.68,.42,.5,.45,1.04,1.12],[21,25,"gasthaus",.6,.55,.62,.4,1.0,1.1],[25,30,"nebel",.6,.5,.45,.4,1.04,1.12]];
+function photo(k,u,alpha,dark,fx0,fx1,fy,z0,z1){
+  const im=IMG[k];if(!im)return;
+  const s=Math.max(W/im.width,H/im.height)*lerp(z0,z1,u), w=im.width*s, h=im.height*s;
+  const fx=lerp(fx0,fx1,eIO(u));
+  const x=clamp(W/2-w*fx,W-w,0), y=clamp(H/2-h*fy,H-h,0);
+  ctx.save();ctx.globalAlpha=alpha;ctx.drawImage(im,x,y,w,h);
+  ctx.fillStyle=`rgba(10,16,13,${dark})`;ctx.fillRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,"rgba(10,16,13,.75)");g.addColorStop(.16,"rgba(10,16,13,0)");
+  g.addColorStop(.7,"rgba(10,16,13,0)");g.addColorStop(1,"rgba(10,16,13,.85)");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.restore();
+}
+function photos(t){
+  for(let i=0;i<SHOTS.length;i++){const[a,b,k,dark,fx0,fx1,fy,z0,z1]=SHOTS[i];
+    const xin=i===0?1:eIO(p(t,a-.35,a+.15));
+    if(t<a-.35||t>b+.15)continue;
+    photo(k,p(t,a-.35,b+.15),xin,dark,fx0,fx1,fy,z0,z1)}
+}
+
 // Story-Fortschritt oben
-const SCENES=[0,3.6,8,13,17,20];
+const SCENES=[0,4,7.6,12,17,21,25,30];
 function chrome(t,alpha){
   ctx.save();ctx.globalAlpha=alpha;
-  const x0=60,gap=10,n=5,w=(W-2*x0-gap*(n-1))/n;
+  const x0=60,gap=10,n=SCENES.length-1,w=(W-2*x0-gap*(n-1))/n;
   for(let i=0;i<n;i++){const f=p(t,SCENES[i],SCENES[i+1]);
     rrect(x0+i*(w+gap),70,w,6,3);ctx.fillStyle="rgba(231,238,234,.18)";ctx.fill();
     if(f>0){rrect(x0+i*(w+gap),70,w*f,6,3);ctx.fillStyle=C.sign;ctx.fill()}}
@@ -247,7 +271,7 @@ function scene4(t){
 
 // ---------- Szene 5: Ausblick ----------
 function scene5(t){
-  const a=p(t,17.0,17.4);
+  const a=p(t,17.0,17.4)*(1-eIn(p(t,20.65,21.0)));
   ctx.save();ctx.globalAlpha=a;
   text("NÄCHSTES ZIEL",90,360,{font:FB,size:32,weight:600,color:C.muted,ls:6});
   const sc=lerp(.85,1,eBack(p(t,17.0,17.5)));
@@ -265,25 +289,74 @@ function scene5(t){
   const hf=eIO(p(t,17.4,18.5)), idx=Math.min(pts.length-1,Math.floor(hf*(pts.length-1)));
   if(hf<1){ctx.fillStyle=C.sign;ctx.beginPath();ctx.arc(pts[idx][0],pts[idx][1],14,0,7);ctx.fill()}
   const e=eOut(p(t,18.6,19.0));
-  text("Wir sehen uns am Wadabisser.",540,1650+(1-e)*30,{size:68,weight:600,color:C.fg,align:"center",alpha:e});
-  text("Staubern Logbuch · Saison 2026",540,1720+(1-e)*30,{font:FB,size:30,weight:500,color:C.muted,align:"center",alpha:e,ls:2});
+  text("Gipfel: Berggasthaus Staubern",90,1640+(1-e)*30,{font:FB,size:34,weight:600,color:C.fg,alpha:e});
+  ctx.restore();
+}
+
+// ---------- Intro: Start in Frümsen (0–4 s) ----------
+function intro(t){
+  const out=eIn(p(t,3.65,4.0));
+  ctx.save();ctx.globalAlpha=1-out;ctx.translate(0,-out*120);
+  const a=eOut(p(t,.3,.8));
+  text("START",92,1180,{font:FB,size:32,weight:600,color:C.sign,ls:6,alpha:a});
+  ctx.save();ctx.shadowColor="rgba(0,0,0,.55)";ctx.shadowBlur=30;
+  text("FRÜMSEN",80,1360+(1-a)*40,{size:220,color:C.fg,alpha:a});ctx.restore();
+  text("Talstation Staubernbahn · Sennwald SG",92,1420,{font:FB,size:34,weight:500,color:C.fg,alpha:eOut(p(t,.7,1.1))});
+  // Wegweiser zeigt nach oben rechts
+  const s=eOut(p(t,1.3,1.8));
+  ctx.save();ctx.translate(lerp(-700,92,s),1500);
+  ctx.shadowColor="rgba(0,0,0,.45)";ctx.shadowBlur=30;ctx.shadowOffsetY=10;
+  ctx.fillStyle=C.sign;signPath(0,0,620,120,46);ctx.fill();ctx.shadowColor="transparent";
+  trailMark(24,18,90,16);
+  text("Staubern",24,98,{size:66,color:C.ink});
+  text("1'221 Hm",548,98,{font:FB,size:30,weight:600,color:C.ink,align:"right"});
+  ctx.restore();
+  const l1=eOut(p(t,2.2,2.55)), l2=eOut(p(t,2.7,3.05));
+  ctx.save();ctx.shadowColor="rgba(0,0,0,.6)";ctx.shadowBlur=24;
+  text("Eine Saison.",92,1735+(1-l1)*30,{size:84,weight:600,color:C.fg,alpha:l1});
+  text("Ein Berg.",500,1735+(1-l2)*30,{size:84,weight:600,color:C.sign,alpha:l2});
+  ctx.restore();
+  ctx.restore();
+}
+
+// ---------- Abspann mit Bildnachweisen (25–30 s) ----------
+const CREDITS=[["Frümsen","Plutowiki","CC0"],["Stauberenkanzel","Friedrich Böhringer","CC BY-SA 2.5"],["Frümsner Alp","Friedrich Böhringer","CC BY-SA 2.5"],
+  ["Stauberenfirst","Friedrich Böhringer","CC BY-SA 2.5"],["Kreuzberge im Winter","Christoph Strässler","CC BY-SA 2.0"],["Gasthaus Staubern","Uwelino","CC BY-SA 4.0"],["Staubernkanzel","ANKAWÜ","CC BY-SA 3.0"]];
+function outro(t){
+  const e=eOut(p(t,25.1,25.6));
+  ctx.save();ctx.shadowColor="rgba(0,0,0,.6)";ctx.shadowBlur=24;
+  text("Wir sehen uns",90,560+(1-e)*30,{size:120,weight:700,color:C.fg,alpha:e});
+  text("am Wadabisser.",90,690+(1-e)*30,{size:120,weight:700,color:C.sign,alpha:eOut(p(t,25.4,25.9))});
+  ctx.restore();
+  text("Staubern Logbuch · Saison 2026 · 23 Aufstiege",92,770,{font:FB,size:32,weight:500,color:C.fg,alpha:p(t,25.8,26.2)});
+  const c=p(t,26.0,26.5);if(c<=0)return;
+  ctx.save();ctx.globalAlpha=c;
+  rrect(60,1140,960,600,24);ctx.fillStyle="rgba(15,22,19,.82)";ctx.fill();
+  text("FOTOS · WIKIMEDIA COMMONS",100,1205,{font:FB,size:26,weight:600,color:C.sign,ls:4});
+  text("zugeschnitten und abgedunkelt",980,1205,{font:FB,size:24,weight:500,color:C.muted,align:"right"});
+  CREDITS.forEach(([m,a,l],i)=>{const y=1270+i*62;
+    text(m,100,y,{font:FB,size:30,weight:600,color:C.fg});
+    text(a,470,y,{font:FB,size:30,weight:500,color:C.fg});
+    text(l,980,y,{font:FM,size:26,weight:500,color:C.muted,align:"right"})});
+  text("Video: CC BY-SA 4.0 · Daten: Strava",100,1715,{font:FB,size:24,weight:500,color:C.muted});
   ctx.restore();
 }
 
 function draw(t){
   ctx=document.getElementById("c").getContext("2d");
   ctx.save();
-  // Kamera-Puls auf den Schlägen nach dem Drop
   background(t);
-  chrome(t,clamp(p(t,.1,.5))*(1-p(t,19.3,19.8)));
-  if(t<3.6)scene1(t); else if(t<8)scene2(t); else if(t<13)scene3(t); else if(t<17)scene4(t); else scene5(t);
-  // Ausblenden
-  const f=p(t,19.4,20);if(f>0){ctx.fillStyle=`rgba(8,12,10,${eIn(f)})`;ctx.fillRect(0,0,W,H)}
-  const fi=1-p(t,0,.3);if(fi>0){ctx.fillStyle=`rgba(8,12,10,${fi})`;ctx.fillRect(0,0,W,H)}
+  photos(t);
+  chrome(t,clamp(p(t,.1,.5))*(1-p(t,29.2,29.7)));
+  const OFF=4; // die Szenen 1–5 laufen in ihrer ursprünglichen Zeit, 4 s versetzt
+  if(t<4)intro(t); else if(t<7.6)scene1(t-OFF); else if(t<12)scene2(t-OFF); else if(t<17)scene3(t-OFF); else if(t<21)scene4(t-OFF); else if(t<25)scene5(t-OFF); else outro(t);
+  // Ein- und Ausblenden
+  const f=p(t,29.3,30);if(f>0){ctx.fillStyle=`rgba(8,12,10,${eIn(f)})`;ctx.fillRect(0,0,W,H)}
+  const fi=1-p(t,0,.4);if(fi>0){ctx.fillStyle=`rgba(8,12,10,${fi})`;ctx.fillRect(0,0,W,H)}
   ctx.restore();
 }
 window.draw=draw;
-window.ready=document.fonts.load(`700 40px ${FD}`).then(()=>Promise.all([document.fonts.load(`600 40px ${FD}`),document.fonts.load(`500 20px ${FM}`),document.fonts.load(`500 20px ${FB}`),document.fonts.load(`600 20px ${FB}`)])).then(()=>{draw(0);return true});
+window.ready=document.fonts.load(`700 40px ${FD}`).then(()=>Promise.all([document.fonts.load(`600 40px ${FD}`),document.fonts.load(`500 20px ${FM}`),document.fonts.load(`500 20px ${FB}`),document.fonts.load(`600 20px ${FB}`),loadImgs()])).then(()=>{draw(0);return true});
 </script>
 </body>
 </html>
