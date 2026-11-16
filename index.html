@@ -8,11 +8,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Staubern">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0F1613">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#EDF0EE">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0F1613">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-512.png">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" crossorigin href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Ein-Spalten-App fürs iPhone, gelber Wegweiser als Leitelement, Tab-Leiste unten */
 :root{
@@ -83,7 +84,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--glacier);outlin
 .chip.race{border-color:var(--warn);color:var(--warn)}
 label{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
 input[type=range]{width:100%;accent-color:var(--fir)}
-input[type=text],input[type=password],textarea{width:100%;font:15px var(--f-mono);padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+input[type=text],input[type=password],textarea,select{width:100%;font:15px var(--f-mono);padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
 textarea{min-height:76px;resize:vertical;font-size:12px}
 .field{display:flex;flex-direction:column;gap:5px}
 .result{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -124,6 +125,23 @@ nav.tabs a[aria-current="page"]{color:var(--fir)}
 .dbar span{position:absolute;top:0;bottom:0;border-radius:3px}
 .dbar:after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--muted)}
 .pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--glacier);margin-right:8px;vertical-align:1px}
+.hdr{display:flex;align-items:center;gap:8px;flex:none}
+select.pill{width:auto;font:600 12.5px var(--f-body);color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:5px 10px}
+.goal{display:block;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
+.goal:active{transform:scale(.985)}
+.goal .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.goal .g{font-family:var(--f-display);font-weight:700;font-size:20px}
+.goal .bar{height:8px;border-radius:4px;background:var(--line);margin-top:8px;overflow:hidden}
+.goal .bar span{display:block;height:100%;border-radius:4px;background:var(--sign)}
+.months{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;align-items:end}
+.months .m{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;color:var(--muted)}
+.months .m i{display:block;width:100%;max-width:36px;border-radius:4px 4px 0 0;background:var(--fir);min-height:2px}
+.months .m b{font-family:var(--f-mono);font-weight:500;color:var(--fg);font-size:12.5px}
+.shead{position:sticky;top:0;z-index:2;background:var(--surface);margin:-10px 0 -4px;padding:10px 0 8px;display:flex;flex-direction:column;gap:6px}
+.shead .bar{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.shead .acts{display:flex;gap:6px;flex:none}
+.btn.nav{padding:8px 13px;font-size:17px;line-height:1}
+.sheet{overscroll-behavior:contain;outline:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 18px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:99px;font-size:13.5px;z-index:40;max-width:90%}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}
   .pulse{animation:pl 1.2s ease-in-out infinite}@keyframes pl{50%{opacity:.25}}}
@@ -131,9 +149,11 @@ nav.tabs a[aria-current="page"]{color:var(--fir)}
 </head>
 <body>
 <div class="wrap">
-  <header class="top">
-    <div style="min-width:0"><div class="eyebrow">Frümsen → Staubern · 1'221 Hm</div><h1 id="pageTitle">Übersicht</h1></div>
-    <button class="sync" id="syncBtn" aria-label="Strava-Verbindung und Aktualisierung"><span class="dot" id="syncDot"></span><span id="syncText">Strava</span></button>
+  <header>
+    <div class="eyebrow">Frümsen → Staubern · 1'221 Hm</div>
+    <div class="top"><h1 id="pageTitle" style="min-width:0">Übersicht</h1>
+    <div class="hdr"><select class="pill" id="seasonSel" aria-label="Saison" hidden></select>
+    <button class="sync" id="syncBtn" aria-label="Strava-Verbindung und Aktualisierung"><span class="dot" id="syncDot"></span><span id="syncText">Strava</span></button></div></div>
   </header>
   <main id="view"></main>
 </div>
@@ -146,13 +166,14 @@ nav.tabs a[aria-current="page"]{color:var(--fir)}
 </nav>
 
 <div class="backdrop" id="backdrop" hidden></div>
-<div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden><div class="inner" id="sheetInner"></div></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1" hidden><div class="inner" id="sheetInner"></div></div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
 "use strict";
 // ---------- Konstanten ----------
-const ROUTE_HM=1221, SEASON_START=Date.UTC(2026,0,1)/1000;
+const ROUTE_HM=1221, FIRST_SEASON=2026, EVEREST=8849;
+const MON=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const LT=156, HFMAX=174;
 const ZONES=[["Z1","Erholung","< 120",0,119,"#8FB8A8"],["Z2","Grundlage","120–135",120,135,"#5FA383"],["Z3","Tempo","136–145",136,145,"#E3B83C"],["Z4","Schwelle","146–156",146,156,"#E08A2E"],["Z5","Über Schwelle","157–174",157,174,"#C8463C"]];
 const SEGS=[["Talstation - Abzweigung","Start bis Abzweigung","1.0 km · 212 Hm"],["Wadabisser","Wadabisser","0.66 km · 298 Hm"],["Offach Bissa","Offach Bissa","0.69 km · 225 Hm"],["Frümser Alp - Staubern","Frümser Alp bis Staubern","2.07 km · 508 Hm"],["Staubern Finish","Querung ins Ziel","0.59 km · 52 Hm"]];
@@ -169,8 +190,15 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.
 function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>el.hidden=true,2600)}
 
 // ---------- Zustand ----------
-const state={acts:store.get("acts",[]),details:store.get("details",{}),syncedAt:store.get("syncedAt",null),sync:"idle",syncMsg:"",
-  calcT:store.get("calcT",4380),calcEco:store.get("calcEco",null),chart:store.get("chart","vam")};
+// Eine Saison ist ein Kalenderjahr. Gezeigt wird das laufende Jahr, solange es dort Aufstiege gibt, sonst die letzte Saison mit Aufstiegen.
+const curSeason=()=>Math.max(FIRST_SEASON,new Date().getFullYear());
+const seasons=()=>{const l=[];for(let y=curSeason();y>=FIRST_SEASON;y--)l.push(y);return l};
+const seasonActs=y=>store.get("acts:"+y,y===FIRST_SEASON?store.get("acts",[]):[]);
+const seasonSynced=y=>store.get("syncedAt:"+y,y===FIRST_SEASON?store.get("syncedAt",null):null);
+const autoSeason=()=>seasons().find(y=>seasonActs(y).length)||curSeason();
+const state={season:autoSeason(),picked:false,details:store.get("details",{}),sync:"idle",syncMsg:"",
+  calcT:store.get("calcT",4380),calcEco:store.get("calcEco",null),chart:store.get("chart","vam"),sort:store.get("sort","datum")};
+state.acts=seasonActs(state.season); state.syncedAt=seasonSynced(state.season);
 let cfg=store.get("cfg",{});
 const idb={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{const r=indexedDB.open("staubern",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))},
   async get(k){try{const d=await this.open();return await new Promise((res,rej)=>{const q=d.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}catch(e){return undefined}},
@@ -206,18 +234,37 @@ async function api(path,params={}){
 function isAscent(a){return /staub/i.test(a.name||"")&&(a.total_elevation_gain||0)>=1000}
 function slim(a){return {id:String(a.id),name:a.name,start:a.start_date_local,t:a.elapsed_time,mov:a.moving_time,hm:a.total_elevation_gain,km:a.distance/1000,
   hr:a.average_heartrate??null,hrMax:a.max_heartrate??null,temp:a.average_temp??null,wt:a.workout_type??null}}
+async function fetchSeason(y){
+  let page=1, all=[];
+  for(;;){const batch=await api("/athlete/activities",{after:Date.UTC(y,0,1)/1000,before:Date.UTC(y+1,0,1)/1000,per_page:200,page});all=all.concat(batch);if(batch.length<200||page>=5)break;page++}
+  const acts=all.filter(isAscent).map(slim).sort((a,b)=>a.start.localeCompare(b.start));
+  store.set("acts:"+y,acts); store.set("syncedAt:"+y,Date.now());
+  return acts;
+}
+let syncRun=0;
 async function sync(manual){
   if(!connected()||state.sync==="loading") return;
+  const run=++syncRun, y=state.season, cur=curSeason();
   state.sync="loading"; renderSync();
   try{
-    let page=1, all=[];
-    for(;;){const batch=await api("/athlete/activities",{after:SEASON_START,per_page:200,page});all=all.concat(batch);if(batch.length<200||page>=5)break;page++}
-    state.acts=all.filter(isAscent).map(slim).sort((a,b)=>a.start.localeCompare(b.start));
-    state.syncedAt=Date.now(); store.set("acts",state.acts); store.set("syncedAt",state.syncedAt);
-    state.sync="live"; if(manual) toast("Aktualisiert");
-  }catch(e){state.sync="warn";state.syncMsg=e.msg||"Keine Verbindung zu Strava."; if(manual) toast(state.syncMsg)}
+    const acts=await fetchSeason(y); if(run!==syncRun) return;
+    state.acts=acts; state.syncedAt=Date.now(); state.sync="live";
+    // Wer noch die Vorsaison sieht, wechselt automatisch, sobald es im neuen Jahr den ersten Aufstieg gibt.
+    // Umgekehrt zeigt ein leeres neues Jahr die Vorsaison, solange niemand selbst eine Saison gewählt hat.
+    if(!state.picked&&y!==cur){const now=await fetchSeason(cur); if(run!==syncRun) return;
+      if(now.length){state.season=cur;state.acts=now;toast("Saison "+cur+" gestartet")}}
+    else if(!state.picked&&!acts.length&&y>FIRST_SEASON){const old=await fetchSeason(y-1); if(run!==syncRun) return;
+      if(old.length){state.season=y-1;state.acts=old}}
+    if(manual) toast("Aktualisiert");
+  }catch(e){if(run!==syncRun) return;state.sync="warn";state.syncMsg=e.msg||"Keine Verbindung zu Strava."; if(manual) toast(state.syncMsg)}
   renderSync(); render(); if(detailId) paintDetail();
   syncGarmin();
+}
+function setSeason(y){
+  if(y===state.season) return;
+  syncRun++; closeSheet();
+  state.season=y; state.picked=true; state.acts=seasonActs(y); state.syncedAt=seasonSynced(y); state.sync="idle";
+  renderSync(); render(); sync(false);
 }
 async function detail(id){
   if(state.details[id]) return state.details[id];
@@ -227,7 +274,9 @@ async function detail(id){
   state.details[id]=d; store.set("details",state.details); return d;
 }
 function renderSync(){
-  const dot=$("#syncDot"),txt=$("#syncText");
+  const dot=$("#syncDot"),txt=$("#syncText"),sel=$("#seasonSel"),ys=seasons();
+  sel.hidden=!connected()||ys.length<2;
+  if(!sel.hidden) sel.innerHTML=ys.map(y=>`<option value="${y}"${y===state.season?" selected":""}>${y}</option>`).join("");
   if(!connected()){dot.className="dot warn";txt.textContent="Verbinden";return}
   dot.className="dot"+(state.sync==="live"?" live":state.sync==="warn"?" warn":"");
   if(state.sync==="loading") txt.textContent="Lädt …";
@@ -249,31 +298,38 @@ const perf=l=>l.filter(e=>e.kind!=="company");
 const byId=id=>ascents().find(e=>e.id===id);
 
 // ---------- Diagramm ----------
+const CHART={zeit:["Zeit","Aufstiegszeit",e=>e.t],vam:["VAM","Steigleistung",e=>e.vam],eco:["Ökonomie","Ökonomie",e=>e.eco]};
 function chart(list,mode){
-  const data=perf(list).filter(e=>mode==="vam"?e.vam:e.eco);
+  const get=CHART[mode][2], zeit=mode==="zeit", data=perf(list).filter(get);
   if(data.length<2) return `<p class="note">Für den Verlauf braucht es mindestens zwei Aufstiege.</p>`;
-  const vals=data.map(e=>mode==="vam"?e.vam:e.eco);
-  const W=360,H=200,L=36,R=10,T=12,B=26, step=mode==="vam"?100:0.5;
-  const lo=Math.min(mode==="vam"?700:5.0,Math.floor(Math.min(...vals)/step)*step);
-  const hi=Math.max(mode==="vam"?1000:6.5,Math.ceil(Math.max(...vals)/step)*step+(mode==="vam"?50:0.25));
-  const x=i=>L+(W-L-R)*(i/(data.length-1)), y=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));
+  const vals=data.map(get), mn=Math.min(...vals), mx=Math.max(...vals);
+  const W=360,H=200,L=36,R=10,T=12,B=26;
+  let step,lo,hi;
+  if(zeit){step=mx-mn>2700?900:mx-mn>1200?600:300;lo=Math.floor((mn-60)/step)*step;hi=Math.ceil(mx/step)*step}
+  else if(mode==="vam"){step=100;lo=Math.min(700,Math.floor(mn/step)*step);hi=Math.max(1000,Math.ceil(mx/step)*step+50)}
+  else{step=0.5;lo=Math.min(5,Math.floor(mn/step)*step);hi=Math.max(6.5,Math.ceil(mx/step)*step+0.25)}
+  // Bei der Zeit steht die schnellere Zeit oben, damit «besser» in allen drei Ansichten nach oben zeigt
+  const x=i=>L+(W-L-R)*(i/(data.length-1)), y=v=>T+(H-T-B)*(zeit?(v-lo)/(hi-lo):1-(v-lo)/(hi-lo));
+  const tick=v=>zeit?fmt(v).slice(0,-3):mode==="vam"?v:v.toFixed(1);
   let g="";
-  for(let v=lo;v<=hi-step/2+1e-9;v+=step) g+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${mode==="vam"?v:v.toFixed(1)}</text>`;
-  if(mode==="vam"){
-    const s80=ROUTE_HM*60/80,s75=ROUTE_HM*60/75;
-    g+=`<line x1="${L}" x2="${W-R}" y1="${y(s80)}" y2="${y(s80)}" stroke="var(--fir)" stroke-dasharray="4 3"/><text x="${L+4}" y="${y(s80)-4}" style="fill:var(--fir)">Sub-80</text>`;
-    g+=`<line x1="${L}" x2="${W-R}" y1="${y(s75)}" y2="${y(s75)}" stroke="var(--warn)" stroke-dasharray="4 3"/><text x="${L+4}" y="${y(s75)-4}" style="fill:var(--warn)">Sub-75</text>`;
+  for(let v=lo;v<=(zeit?hi:hi-step/2)+1e-9;v+=step) g+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${tick(v)}</text>`;
+  if(mode!=="eco"){
+    const at=t=>zeit?t:ROUTE_HM*3600/t, goal=state.calcT;
+    g+=`<line x1="${L}" x2="${W-R}" y1="${y(at(4800))}" y2="${y(at(4800))}" stroke="var(--fir)" stroke-dasharray="4 3"/><text x="${L+4}" y="${y(at(4800))-4}" style="fill:var(--fir)">Sub-80</text>`;
+    g+=`<line x1="${L}" x2="${W-R}" y1="${y(at(4500))}" y2="${y(at(4500))}" stroke="var(--warn)" stroke-dasharray="4 3"/><text x="${L+4}" y="${y(at(4500))-4}" style="fill:var(--warn)">Sub-75</text>`;
+    if(Math.abs(goal-4500)>45&&Math.abs(goal-4800)>45&&at(goal)>=lo&&at(goal)<=hi)
+      g+=`<line x1="${L}" x2="${W-R}" y1="${y(at(goal))}" y2="${y(at(goal))}" stroke="var(--fg)" stroke-dasharray="1 3" opacity=".7"/><text x="${(L+W-R)/2}" y="${y(at(goal))-4}" text-anchor="middle" style="fill:var(--fg)">Ziel ${fmt(goal)}</text>`;
   }
-  const MON=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];let lastM=null,lastX=-99;
+  let lastM=null,lastX=-99;
   data.forEach((e,i)=>{const m=e.date.slice(0,7);if(m!==lastM&&x(i)-lastX>24){g+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle">${MON[+e.date.slice(5,7)-1]}</text>`;lastX=x(i)}lastM=m});
   const pts=vals.map((v,i)=>[x(i),y(v)]);
   const path=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
   g+=`<path d="${path} L${pts[pts.length-1][0]} ${H-B} L${pts[0][0]} ${H-B} Z" fill="var(--glacier)" opacity=".10"/><path d="${path}" fill="none" stroke="var(--glacier)" stroke-width="2" stroke-linejoin="round"/>`;
   pts.forEach((p,i)=>{const e=data[i],last=i===pts.length-1,c=e.kind==="race"?"var(--warn)":e.kind==="heat"?"var(--bad)":"var(--glacier)";
     g+=`<circle cx="${p[0]}" cy="${p[1]}" r="${last?4.5:3}" fill="${c}" stroke="var(--surface)" stroke-width="1.5"/>`;
-    if(last) g+=`<text x="${p[0]-7}" y="${p[1]+14}" text-anchor="end" style="fill:var(--fg);font-weight:500">${mode==="vam"?nf(vals[i]):nf(vals[i],2)}</text>`;
+    if(last) g+=`<text x="${p[0]-7}" y="${p[1]+14}" text-anchor="end" style="fill:var(--fg);font-weight:500">${zeit?fmt(vals[i]):mode==="vam"?nf(vals[i]):nf(vals[i],2)}</text>`;
     g+=`<circle class="hit" cx="${p[0]}" cy="${p[1]}" r="11" data-id="${e.id}"/>`});
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Verlauf pro Aufstieg">${g}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${CHART[mode][1]} pro Aufstieg">${g}</svg>`;
 }
 
 // ---------- Ansichten ----------
@@ -293,7 +349,7 @@ function vSetup(){
 function vUebersicht(){
   const l=ascents();
   if(!l.length) return state.sync==="loading"?`<p class="note"><span class="pulse"></span>Aufstiege werden von Strava geladen …</p>`:
-    `<section class="panel"><h3>Noch keine Aufstiege</h3><p class="note">Die App sucht Aktivitäten seit 1.1.2026 mit «Staub» im Namen und mindestens 1'000 Hm.</p></section>`;
+    `<section class="panel"><h3>Noch keine Aufstiege ${state.season}</h3><p class="note">Die App sucht Aktivitäten im Jahr ${state.season} mit «Staub» im Namen und mindestens 1'000 Hm.${seasons().length>1?" Frühere Saisons findest du oben rechts.":""}</p></section>`;
   const s=perf(l), best=[...s].sort((a,b)=>a.t-b.t)[0]||l[0];
   const last=l[l.length-1], prev=s.filter(e=>e!==last).slice(-1)[0];
   const bestEco=s.filter(e=>e.eco).sort((a,b)=>b.eco-a.eco)[0];
@@ -305,6 +361,7 @@ function vUebersicht(){
     <div class="row"><span class="dest">Staubern</span><span class="t">${fmt(best.t)}</span></div>
     <div class="sub"><span>Bestzeit · ${esc(best.label)} am ${dDE(best.date)}</span><span class="num">${nf(best.vam)} Hm/h</span></div>
   </button>
+  ${goalRow(best,s[0]||best)}
   <div class="tiles">
     <button class="tile" data-id="${last.id}"><div class="k">Letzter Aufstieg · ${esc(last.label)}</div><div class="v">${fmt(last.t)}</div>
       <div class="d ${dT<0?"up":dT>0?"down":"muted"}">${prev?sgn(dT)+fmtMS(dT)+" zu "+esc(prev.label):dDE(last.date)}</div><div class="tap">Analyse öffnen ›</div></button>
@@ -313,17 +370,38 @@ function vUebersicht(){
     <div class="tile"><div class="k">Höhenmeter</div><div class="v">${nf(hmSum)}</div><div class="d muted">Beste VAM ${nf(bestVam.vam)} Hm/h</div></div>
   </div>
   <section class="panel">
-    <div class="top"><h3>${state.chart==="vam"?"Steigleistung":"Ökonomie"}</h3>
-      <div class="seg" role="group" aria-label="Kennzahl"><button data-chart="vam" aria-pressed="${state.chart==="vam"}">VAM</button><button data-chart="eco" aria-pressed="${state.chart==="eco"}">Ökonomie</button></div></div>
+    <div class="top"><h3>${CHART[state.chart][1]}</h3>
+      <div class="seg" role="group" aria-label="Kennzahl">${Object.keys(CHART).map(k=>`<button data-chart="${k}" aria-pressed="${state.chart===k}">${CHART[k][0]}</button>`).join("")}</div></div>
     ${chart(l,state.chart)}
     <div class="legend"><span><b style="background:var(--glacier)"></b>Solo</span><span><b style="background:var(--warn)"></b>Wettkampf</span><span><b style="background:var(--bad)"></b>Hitze</span><span>Punkt antippen für Analyse</span></div>
   </section>
+  ${seasonPanel(l)}
   ${state.sync==="warn"?`<div class="status edge">${esc(state.syncMsg)} Angezeigt werden die zuletzt geladenen Daten.</div>`:""}`;
 }
+function goalRow(best,first){
+  const g=state.calcT, gap=best.t-g, span=first.t-g, prog=span>0?Math.max(0,Math.min(1,(first.t-best.t)/span)):1;
+  return `<a class="goal" href="#rechner" aria-label="Zielzeit öffnen">
+    <div class="row"><span class="g">Ziel ${fmt(g)}</span><span class="${gap<=0?"up":""}">${gap<=0?"erreicht":"noch "+fmtMS(gap)}</span></div>
+    <div class="bar"><span style="width:${(prog*100).toFixed(1)}%"></span></div>
+    <div class="tap">${gap<=0?`Bestzeit ${fmtMS(gap)} unter dem Ziel. Neues Ziel setzen ›`:first.id===best.id?"Zielzeit anpassen ›":`Vom ersten Aufstieg (${fmt(first.t)}) bis zum Ziel: ${Math.round(prog*100)} % geschafft ›`}</div></a>`;
+}
+function seasonPanel(l){
+  const km=l.reduce((a,e)=>a+e.km,0), sec=l.reduce((a,e)=>a+e.t,0), hm=l.reduce((a,e)=>a+e.hm,0);
+  const n={}; l.forEach(e=>{const m=+e.date.slice(5,7);n[m]=(n[m]||0)+1});
+  const ms=Object.keys(n).map(Number), mx=Math.max(...Object.values(n)); let bars="";
+  for(let m=Math.min(...ms);m<=Math.max(...ms);m++) bars+=`<div class="m"><b>${n[m]||0}</b><i style="height:${Math.round(56*(n[m]||0)/mx)}px"></i><span>${MON[m-1]}</span></div>`;
+  return `<section class="panel"><h3>Saison ${state.season}</h3>
+    <div class="months" role="img" aria-label="Aufstiege pro Monat: ${ms.sort((a,b)=>a-b).map(m=>MON[m-1]+" "+n[m]).join(", ")}">${bars}</div>
+    <div class="kv"><div><div class="k">Distanz</div><div class="v">${nf(km)} km</div></div>
+      <div><div class="k">Zeit am Berg</div><div class="v">${Math.floor(sec/3600)} h ${Math.floor(sec%3600/60)} min</div></div>
+      <div><div class="k">Mount Everest</div><div class="v">${nf(hm/EVEREST,1)} ×</div></div></div></section>`;
+}
 function vAufstiege(){
-  const l=ascents().slice().reverse();
-  if(!l.length) return `<p class="note">Noch keine Aufstiege geladen.</p>`;
-  return `<div class="list">${l.map(e=>{
+  const all=ascents(), fast=state.sort==="zeit";
+  if(!all.length) return `<p class="note">Noch keine Aufstiege geladen.</p>`;
+  const l=fast?[...all].sort((a,b)=>a.t-b.t):all.slice().reverse();
+  return `<div class="seg" role="group" aria-label="Sortierung"><button data-sort="datum" aria-pressed="${!fast}">Neueste zuerst</button><button data-sort="zeit" aria-pressed="${fast}">Schnellste zuerst</button></div>
+  <div class="list">${l.map(e=>{
     const cls=e.t<4500?"sub75":e.t<4800?"sub80":"";
     const chip=e.kind==="race"?'<span class="chip race">Rennen</span>':e.kind==="company"?'<span class="chip">Begleitung</span>':e.kind==="heat"?'<span class="chip">Hitze</span>':"";
     return `<button class="item" data-id="${e.id}"><span class="badge ${cls}">${esc(e.label)}</span>
@@ -340,7 +418,8 @@ function vRechner(){
     <div><label for="calcEco"><span>Ökonomie (Hm/h je Schlag)</span><span class="num" style="color:var(--fg)" id="calcEv">${eco.toFixed(2)}</span></label>
       <input type="range" id="calcEco" min="5.80" max="6.90" step="0.01" value="${eco}"></div>
     <div id="calcOut" style="display:flex;flex-direction:column;gap:10px">${calcOut(t,eco)}</div></section>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">${[[4440,"1:14:00"],[4380,"1:13:00"],[4320,"1:12:00"]].map(([v,l])=>`<button class="btn ghost" data-preset="${v}">${l}</button>`).join("")}</div>`;
+  <div style="display:flex;gap:8px;flex-wrap:wrap">${[[4440,"1:14:00"],[4380,"1:13:00"],[4320,"1:12:00"]].map(([v,l])=>`<button class="btn ghost" data-preset="${v}">${l}</button>`).join("")}</div>
+  <p class="note">Die gewählte Zielzeit gilt auch als Saisonziel in der Übersicht.</p>`;
 }
 function calcOut(t,eco){
   const vam=ROUTE_HM*3600/t, hr=vam/eco, level=hr<=153?"ok":hr<=LT?"edge":"over";
@@ -352,10 +431,50 @@ function calcOut(t,eco){
     <div style="overflow-x:auto"><table><thead><tr><th>Abschnitt</th><th class="r">${esc(best.label)}</th><th class="r">Ziel</th><th class="r">Δ</th></tr></thead><tbody>
     ${SEGS.filter(x=>d.segs[x[0]]).map(x=>{const st=d.segs[x[0]].t;return `<tr><td>${x[1]}<br><span class="note">${x[2]}</span></td><td class="r num">${fmtMS(st)}</td><td class="r num"><b>${fmtMS(st*f)}</b></td><td class="r num ${f<1?"up":"down"}">${sgn(f-1)}${Math.abs(Math.round(st*(f-1)))} s</td></tr>`}).join("")}
     </tbody></table></div></div>`;}
-  else if(best) pacing=`<p class="note">Öffne einmal die Analyse deiner Bestzeit, dann erscheint hier das Pacing pro Abschnitt.</p>`;
+  else if(best) pacing=dload&&dload.err?`<div class="status edge">${esc(dload.err)}</div>`:`<p class="note"><span class="pulse"></span>Abschnitte der Bestzeit werden von Strava geladen …</p>`;
   return `<div class="result"><div class="tile"><div class="k">Nötige VAM</div><div class="v">${nf(vam)}</div><div class="d muted">Hm/h bei 1'221 Hm</div></div>
     <div class="tile"><div class="k">Nötiger Ø-Puls</div><div class="v">${nf(hr,1)}</div><div class="d muted">Schwelle Gehen: ${LT}</div></div></div>
-    <div class="status ${level}">${msg}</div>${pacing}`;
+    <div class="status ${level}">${msg}</div>${pacing}${recordsOut(t,best,d,s)}`;
+}
+// Schnellste Zeit pro Abschnitt über alle Aufstiege der Saison, deren Abschnitte schon geladen sind
+function segRecords(){
+  const out={};
+  for(const e of perf(ascents())){const d=state.details[e.id]; if(!d) continue;
+    for(const [k] of SEGS){const x=d.segs[k]; if(x&&x.t>0&&(!out[k]||x.t<out[k].t)) out[k]={t:x.t,label:e.label}}}
+  return out;
+}
+function recordsOut(t,best,d,s){
+  if(!best||!d) return "";
+  const rec=segRecords(), have=s.filter(e=>state.details[e.id]).length;
+  const rs=SEGS.filter(x=>d.segs[x[0]]&&rec[x[0]]).map(x=>({name:x[1],bt:d.segs[x[0]].t,r:rec[x[0]],gain:d.segs[x[0]].t-rec[x[0]].t}));
+  if(!rs.length) return "";
+  const gain=rs.reduce((a,x)=>a+x.gain,0), ideal=best.t-gain;
+  let msg, cls="ok";
+  if(!gain) msg=`Bei ${best.label} warst du in jedem Abschnitt so schnell wie nie zuvor.`;
+  else{msg=`Alle Rekorde am selben Tag ergäben rund ${fmt(ideal)}, das sind ${fmtMS(gain)} weniger als bei ${best.label}.`;
+    if(t<best.t){ if(ideal<=t) msg+=` Das Ziel ${fmt(t)} liegt damit in Reichweite.`;
+      else{msg+=` Bis ${fmt(t)} fehlen dann noch ${fmtMS(ideal-t)}; dafür braucht es neue Abschnitts-Rekorde.`;cls="edge"}}}
+  const prog=dload&&dload.busy?`<p class="note"><span class="pulse"></span>Abschnitte werden geladen: ${have} von ${s.length} Aufstiegen …</p>`
+    :have<s.length?`<p class="note">${dload&&dload.err?esc(dload.err)+" ":""}Rekorde aus ${have} von ${s.length} Aufstiegen.</p>`:"";
+  return `<div><h3 style="margin:8px 0 4px">Abschnitts-Rekorde</h3><p class="note">Deine schnellste Zeit pro Abschnitt in der Saison ${state.season}, verglichen mit der Bestzeit ${esc(best.label)}.</p>
+    <div style="overflow-x:auto"><table><thead><tr><th>Abschnitt</th><th class="r">${esc(best.label)}</th><th class="r">Rekord</th><th class="r">Potenzial</th></tr></thead><tbody>
+    ${rs.map(x=>`<tr><td>${x.name}</td><td class="r num">${fmtMS(x.bt)}</td><td class="r num"><b>${fmtMS(x.r.t)}</b><br><span class="note">${esc(x.r.label)}</span></td><td class="r num ${x.gain>0?"up":"muted"}">${x.gain>0?"−"+x.gain+" s":"Rekord"}</td></tr>`).join("")}
+    </tbody></table></div>${prog}<div class="status ${cls}" style="margin-top:8px">${esc(msg)}</div>
+    <p class="note" style="margin-top:6px">Theoretischer Wert: Die Wegstücke zwischen den Abschnitten bleiben wie bei ${esc(best.label)}, und nicht jeder Rekord gelingt am selben Tag.</p></div>`;
+}
+let dload=null;
+function refreshCalc(){const o=$("#calcOut"); if(o&&connected()) o.innerHTML=calcOut(state.calcT,state.calcEco??defaultEco())}
+// Lädt die Abschnitte aller Aufstiege nach, einen nach dem anderen und die schnellsten zuerst. Strava erlaubt 100 Abfragen pro 15 Minuten.
+async function loadAllDetails(){
+  if(!connected()||(dload&&(dload.busy||(dload.err&&Date.now()-dload.at<15*60e3)))) return;
+  const todo=perf(ascents()).filter(e=>!state.details[e.id]).sort((a,b)=>a.t-b.t);
+  if(!todo.length) return;
+  const run=dload={busy:true,err:null,at:Date.now()};
+  for(const e of todo){
+    try{await detail(e.id)}catch(err){run.err=err.msg||"Abschnitte konnten nicht geladen werden.";break}
+    refreshCalc();
+  }
+  run.busy=false; refreshCalc();
 }
 function vZonen(){
   const l=ascents(), last=l[l.length-1];
@@ -373,7 +492,13 @@ function vZonen(){
 }
 
 // ---------- Regelbasierte Analyse ----------
-function refFor(e){const c=perf(ascents()).filter(x=>x.id!==e.id).sort((a,b)=>a.t-b.t)[0];return c?{ref:c,role:e.t<c.t?"bisherigen Bestzeit":"Bestzeit"}:null}
+let refPick=null;
+function refFor(e){
+  const s=perf(ascents()).filter(x=>x.id!==e.id), p=refPick&&s.find(x=>x.id===refPick);
+  if(p) return {ref:p,role:"zum Aufstieg",custom:true};
+  const c=s.sort((a,b)=>a.t-b.t)[0];
+  return c?{ref:c,role:e.t<c.t?"zur bisherigen Bestzeit":"zur Bestzeit"}:null;
+}
 function rows(d,rd){
   return SEGS.filter(s=>d.segs[s[0]]).map(s=>{const a=d.segs[s[0]],b=rd?.segs[s[0]];return {name:s[1],info:s[2],t:a.t,stop:a.t-a.mov,hr:a.hr,
     rt:b?.t??null,rstop:b?b.t-b.mov:null,rhr:b?.hr??null,d:b?a.t-b.t:null,hrd:(b?.hr&&a.hr)?Math.round(a.hr-b.hr):null}});
@@ -381,7 +506,7 @@ function rows(d,rd){
 function analyze(e,r,d,rd){
   const rs=rows(d,rd).filter(x=>x.d!=null), ref=r.ref, total=e.t-ref.t;
   const hr=d.hr??e.hr, rhr=rd.hr??ref.hr, eco=hr?e.vam/hr:null, reco=rhr?ref.vam/rhr:null;
-  let fazit = total<0?`Neue Bestzeit: ${fmtMS(total)} schneller als ${ref.label}.`:total<=30?`Fast auf Bestzeit-Niveau, nur ${total} s hinter ${ref.label}.`:`${fmtMS(total)} langsamer als ${ref.label}.`;
+  let fazit = total<0?`${r.custom?"":"Neue Bestzeit: "}${fmtMS(total)} schneller als ${ref.label}.`:total<=30?`Fast auf Bestzeit-Niveau, nur ${total} s hinter ${ref.label}.`:`${fmtMS(total)} langsamer als ${ref.label}.`;
   if(eco&&reco){ if(eco<reco-0.15) fazit+=` Mehr Puls bei weniger Tempo: Die Ökonomie fiel von ${reco.toFixed(2)} auf ${eco.toFixed(2)}.`;
     else if(eco>reco+0.1) fazit+=` Die Ökonomie war mit ${eco.toFixed(2)} besser als bei ${ref.label} (${reco.toFixed(2)}).`;
     else fazit+=` Die Ökonomie lag mit ${eco.toFixed(2)} nahe an ${ref.label} (${reco.toFixed(2)}).`; }
@@ -463,10 +588,21 @@ function tagesform(e,r){
     <div><div class="k">Trainingslast</div><div class="v">${gc.ga&&gc.ga.load!=null?Math.round(gc.ga.load):"–"}</div></div>
   </div>${gc.ga?zoneBar(gc.ga.z):""}<p class="note" style="margin-top:6px">Ruhepuls und Body Battery misst Garmin bei dir nur tagsüber, darum fliessen sie nicht in die Analyse ein. Last 7 Tage: Summe der Garmin-Trainingslast aller Einheiten davor.</p></div>`;
 }
+let lastFocus=null;
+function showSheet(){
+  const sh=$("#sheet"); if(sh.hidden) lastFocus=document.activeElement;
+  $("#backdrop").hidden=false; sh.hidden=false; sh.scrollTop=0;
+  document.documentElement.style.overflow="hidden"; // Seite dahinter scrollt nicht mit
+  try{sh.focus({preventScroll:true})}catch(e){}
+}
 async function openDetail(id){
-  const e=byId(id); if(!e) return;
-  detailId=id; $("#backdrop").hidden=false; $("#sheet").hidden=false; $("#sheet").scrollTop=0;
+  if(!byId(id)) return;
+  detailId=id; delete detailErr[id]; showSheet();
   paintDetail();
+  await loadRef(id);
+}
+async function loadRef(id){
+  const e=byId(id); if(!e) return;
   const r=refFor(e);
   try{ await Promise.all([detail(e.id),r?detail(r.ref.id):null]); }catch(err){ detailErr[id]=err.msg||"Abschnitte konnten nicht geladen werden."; }
   if(detailId===id) paintDetail();
@@ -496,12 +632,19 @@ function paintDetail(){
         <td class="r num">${fmtMS(x.t)}</td><td class="r num ${x.d>0?"down":x.d<0?"up":""}">${x.d==null?"–":sgn(x.d)+Math.abs(x.d)+" s"}</td></tr>`}).join("")}</tbody></table></div>
       <p class="note">Abschnitte überlappen teilweise und ergeben zusammen nicht die Gesamtzeit. Pause: Zeit, die Strava als Stillstand zählt, auch sehr langsames Steigen.</p>`
       :`<p class="note">Strava hat für diesen Aufstieg keine passenden Abschnitte erkannt.</p>`;
-    body=`${coach}<div><h3 style="margin-bottom:6px">Abschnitte${r?` <span class="note" style="font-family:var(--f-body);font-weight:400">im Vergleich zur ${esc(r.role)} ${esc(r.ref.label)} (${fmt(r.ref.t)})</span>`:""}</h3>${table}</div>`;
+    body=`${coach}<div><h3 style="margin-bottom:6px">Abschnitte${r?` <span class="note" style="font-family:var(--f-body);font-weight:400">im Vergleich ${esc(r.role)} ${esc(r.ref.label)} (${fmt(r.ref.t)})</span>`:""}</h3>${table}</div>`;
   }
   const dRef=r?e.t-r.ref.t:e.t-4500;
-  $("#sheetInner").innerHTML=`<div class="grab"></div>
-    <div class="top"><div style="min-width:0"><div class="eyebrow">${esc(e.label)} · ${dDE(e.date)} · ${e.time}</div><h2>${esc(e.name)}</h2></div>
-    <button class="btn ghost" id="closeSheet">Schliessen</button></div>
+  const all=ascents(), ix=all.findIndex(x=>x.id===e.id), older=all[ix-1], newer=all[ix+1];
+  const ranked=perf(all).sort((a,b)=>a.t-b.t), rank=ranked.findIndex(x=>x.id===e.id)+1;
+  const others=ranked.filter(x=>x.id!==e.id), fastest=others[0];
+  const refSel=others.length>1?`<div class="field"><label for="refSel">Vergleichen mit</label><select id="refSel">
+      <option value="">${e.t<fastest.t?"Bisherige Bestzeit":"Bestzeit"} · ${esc(fastest.label)} · ${fmt(fastest.t)}</option>
+      ${others.filter(x=>x.id!==fastest.id).sort((a,b)=>b.start.localeCompare(a.start)).map(x=>`<option value="${x.id}"${r&&r.custom&&r.ref.id===x.id?" selected":""}>${esc(x.label)} · ${dDE(x.date).slice(0,6)} · ${fmt(x.t)}</option>`).join("")}</select></div>`:"";
+  $("#sheetInner").innerHTML=`<div class="shead"><div class="grab"></div>
+    <div class="bar"><div class="eyebrow" style="min-width:0">${esc(e.label)} · ${dDE(e.date)} · ${e.time}</div>
+      <div class="acts"><button class="btn ghost nav" id="olderBtn" aria-label="Älterer Aufstieg"${older?"":" disabled"}>‹</button><button class="btn ghost nav" id="newerBtn" aria-label="Neuerer Aufstieg"${newer?"":" disabled"}>›</button><button class="btn ghost" id="closeSheet">Schliessen</button></div></div></div>
+    <h2>${esc(e.name)}</h2>
     <div class="kv">
       <div><div class="k">Zeit</div><div class="v">${fmt(e.t)}</div></div>
       <div><div class="k">${r?"Δ "+esc(r.ref.label):"Sub-75 Δ"}</div><div class="v ${dRef<=0?"up":"down"}">${sgn(dRef)}${fmtMS(dRef)}</div></div>
@@ -509,10 +652,20 @@ function paintDetail(){
       <div><div class="k">Ø / Max HF</div><div class="v">${hr?nf(hr):"–"} / ${hrMax??"–"}</div></div>
       <div><div class="k">Ökonomie</div><div class="v">${nf(eco,2)}</div></div>
       <div><div class="k">Höhenmeter</div><div class="v">${nf(e.hm)}</div></div>
-    </div>${tagesform(e,r)}${body}`;
+      <div><div class="k">Stillstand</div><div class="v">${e.t-e.mov>0?fmtMS(e.t-e.mov):"–"}</div></div>
+      <div><div class="k">Temperatur</div><div class="v">${e.temp!=null?nf(e.temp)+" °C":"–"}</div></div>
+      <div><div class="k">Rang ${state.season}</div><div class="v">${rank?rank+" / "+ranked.length:"–"}</div></div>
+    </div>${refSel}${tagesform(e,r)}${body}`;
   $("#closeSheet").onclick=closeSheet;
+  if(older) $("#olderBtn").onclick=()=>openDetail(older.id);
+  if(newer) $("#newerBtn").onclick=()=>openDetail(newer.id);
+  const sel=$("#refSel"); if(sel) sel.onchange=()=>{refPick=sel.value||null;paintDetail();loadRef(e.id)};
 }
-function closeSheet(){$("#sheet").hidden=true;$("#backdrop").hidden=true;detailId=null}
+function closeSheet(){
+  $("#sheet").hidden=true;$("#backdrop").hidden=true;detailId=null;refPick=null;
+  document.documentElement.style.overflow="";
+  if(lastFocus&&lastFocus.isConnected){try{lastFocus.focus({preventScroll:true})}catch(e){}} lastFocus=null;
+}
 
 // ---------- Verbindung ----------
 function setupCode(){return btoa(JSON.stringify({i:cfg.clientId,s:cfg.clientSecret,r:cfg.refreshToken,gu:cfg.garminUrl||undefined,gk:cfg.garminKey||undefined}))}
@@ -524,8 +677,8 @@ async function garmin(path){
   return j;
 }
 function openConnection(){
-  $("#backdrop").hidden=false;$("#sheet").hidden=false;detailId=null;
-  $("#sheetInner").innerHTML=`<div class="grab"></div><div class="top"><h2>Strava</h2><button class="btn ghost" id="closeSheet">Schliessen</button></div>
+  showSheet();detailId=null;
+  $("#sheetInner").innerHTML=`<div class="shead"><div class="grab"></div><div class="bar"><h2>Strava</h2><button class="btn ghost" id="closeSheet">Schliessen</button></div></div>
     <p class="note">Verbunden${cfg.athlete?" als "+esc(cfg.athlete):""}. ${state.syncedAt?"Zuletzt aktualisiert: "+new Date(state.syncedAt).toLocaleString("de-CH",{dateStyle:"short",timeStyle:"short"})+".":""}</p>
     <button class="btn" id="refreshBtn">Jetzt aktualisieren</button>
     <div class="panel"><h3>Einrichtungscode</h3><p class="note">Damit verbindest du die App auf dem Home-Bildschirm oder einem anderen Gerät, ohne dich neu anzumelden. Behandle ihn wie ein Passwort.</p>
@@ -541,7 +694,7 @@ function openConnection(){
     m.textContent="Teste Verbindung …";try{await garmin("/ping");m.textContent="Verbunden mit Garmin.";syncGarmin()}catch(e){m.textContent=e.msg||"Worker nicht erreichbar. Adresse prüfen."}};
   $("#refreshBtn").onclick=()=>{closeSheet();sync(true)};
   $("#copyBtn").onclick=async()=>{try{await navigator.clipboard.writeText(setupCode());toast("Code kopiert")}catch(e){const t=$("#codeOut");t.focus();t.select()}};
-  $("#logoutBtn").onclick=()=>{if($("#logoutBtn").dataset.sure){cfg={};store.del("cfg");idb.set("cfg",{});store.del("acts");store.del("details");state.acts=[];state.details={};state.syncedAt=null;closeSheet();renderSync();render()}
+  $("#logoutBtn").onclick=()=>{if($("#logoutBtn").dataset.sure){cfg={};store.del("cfg");idb.set("cfg",{});try{Object.keys(localStorage).filter(k=>/^(acts|syncedAt)(:|$)/.test(k)).forEach(k=>store.del(k))}catch(e){}store.del("details");state.acts=[];state.details={};state.syncedAt=null;closeSheet();renderSync();render()}
     else{$("#logoutBtn").dataset.sure="1";$("#logoutBtn").textContent="Wirklich trennen? Nochmals tippen"}};
 }
 async function finishOAuth(){
@@ -588,6 +741,8 @@ function render(){
   document.querySelectorAll("nav.tabs a").forEach(a=>a.setAttribute("aria-current",a.dataset.v===v?"page":"false"));
   document.querySelectorAll("[data-chart]").forEach(b=>b.onclick=()=>{state.chart=b.dataset.chart;store.set("chart",state.chart);render()});
   document.querySelectorAll("#view [data-id]").forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
+  document.querySelectorAll("[data-sort]").forEach(b=>b.onclick=()=>{state.sort=b.dataset.sort;store.set("sort",state.sort);render()});
+  if(v==="rechner") loadAllDetails();
   const ct=$("#calcT"),ce=$("#calcEco");
   if(ct){const upd=()=>{state.calcT=+ct.value;state.calcEco=+ce.value;store.set("calcT",state.calcT);store.set("calcEco",state.calcEco);
     $("#calcTv").textContent=fmt(state.calcT);$("#calcEv").textContent=state.calcEco.toFixed(2);$("#calcOut").innerHTML=calcOut(state.calcT,state.calcEco)};ct.oninput=upd;ce.oninput=upd}
@@ -595,6 +750,7 @@ function render(){
 }
 addEventListener("hashchange",()=>{closeSheet();render();scrollTo(0,0)});
 $("#backdrop").onclick=closeSheet;
+$("#seasonSel").onchange=ev=>setSeason(+ev.target.value);
 $("#syncBtn").onclick=()=>connected()?openConnection():(location.hash="",render());
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape")closeSheet()});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&connected()&&(!state.syncedAt||Date.now()-state.syncedAt>10*60e3))sync(false)});
