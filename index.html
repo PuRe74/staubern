@@ -103,7 +103,7 @@ td.r,th.r{text-align:right}
 .note{font-size:13px;color:var(--muted);margin:0}
 .steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:color-mix(in srgb,var(--surface) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
-  border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);
+  border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);
   padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
 nav.tabs a{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);text-decoration:none;font-size:11px;font-weight:600;padding:4px 0}
 nav.tabs a svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8}
@@ -142,6 +142,14 @@ select.pill{width:auto;font:600 12.5px var(--f-body);color:var(--fg);background:
 .shead .acts{display:flex;gap:6px;flex:none}
 .btn.nav{padding:8px 13px;font-size:17px;line-height:1}
 .sheet{overscroll-behavior:contain;outline:0}
+.dot.bad{background:var(--bad)}
+nav.tabs .ic{position:relative;display:block;line-height:0}
+.tdot{position:absolute;top:-3px;right:-7px;width:11px;height:11px;border-radius:50%;border:2px solid var(--surface);background:var(--muted)}
+.tdot.live{background:var(--good)} .tdot.warn{background:var(--warn)} .tdot.bad{background:var(--bad)}
+.op{display:flex;align-items:center;gap:8px;font-family:var(--f-display);font-size:25px;font-weight:700;line-height:1.15;margin-top:2px}
+.op .dot{width:12px;height:12px}
+a.btn{text-decoration:none;display:inline-block}
+tr.now td{background:color-mix(in srgb,var(--sign) 16%,transparent)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh) + 18px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:99px;font-size:13.5px;z-index:40;max-width:90%}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}
   .pulse{animation:pl 1.2s ease-in-out infinite}@keyframes pl{50%{opacity:.25}}}
@@ -163,6 +171,7 @@ select.pill{width:auto;font:600 12.5px var(--f-body);color:var(--fg);background:
   <a href="#aufstiege" data-v="aufstiege"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14"/></svg>Aufstiege</a>
   <a href="#rechner" data-v="rechner"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 13l3-3M10 3h4"/></svg>Zielzeit</a>
   <a href="#zonen" data-v="zonen"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg>Zonen</a>
+  <a href="#betrieb" data-v="betrieb" id="opsTab"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 7l18-4M12 5v4M7 9h10v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2zM7 13h10"/></svg><i class="tdot" id="opsDot"></i></span>Bahn</a>
 </nav>
 
 <div class="backdrop" id="backdrop" hidden></div>
@@ -491,6 +500,60 @@ function vZonen(){
     <tr><td>Erholung</td><td>zwei Nächte nach jedem harten Aufstieg</td></tr></tbody></table></section>`;
 }
 
+// ---------- Betrieb von Bahn und Berggasthaus ----------
+// Tagesstatus: dieselbe Abfrage, mit der appenzell.ch seine Übersicht «offen / geschlossen» füllt (Bahn Nr. 5, Berggasthaus Nr. 26).
+// Betriebszeiten: von staubern.ch und appenzell.ch abgeschrieben, Stand November 2026.
+const OPS_API="https://www.appenzell.ch/de/?tx_wstourismus_ajax[action]=", OPS_TTL=10*60e3, OPS_TEL="+41817572424";
+const OPS_TXT={open:["Offen","live"],closed:["Geschlossen","bad"],windDependent:["Je nach Wind","warn"],dayOfRest:["Ruhetag","warn"]};
+const BAHN_ZEITEN=[[[1,2,3],"Januar bis März","Geschlossen",""],
+  [[4],"April","9.00 – 22.00 Uhr","Je nach Nachfrage und Wetter. Bei schlechtem Wetter eingestellt."],
+  [[5],"Mai","Täglich 8.00 – 22.00 Uhr",""],[[6,7,8,9],"Juni bis September","Täglich 7.00 – 22.00 Uhr",""],[[10],"Oktober","Täglich 8.00 – 22.00 Uhr",""],
+  [[11,12],"November und Dezember","9.00 – 22.00 Uhr","Je nach Nachfrage und Wetter, vorwiegend für Gruppen. Bei schlechtem Wetter eingestellt."]];
+state.ops=store.get("ops",null); state.opsTry=0;
+// Der Status gilt für den Tag. Ein gespeicherter Stand von gestern wird nicht mehr als aktuell gezeigt.
+const opsNow=()=>state.ops&&new Date(state.ops.at).toDateString()===new Date().toDateString()?state.ops:null;
+async function opsGet(action,key,id){
+  const r=await fetch(`${OPS_API}${action}&type=300&${key}=${id}`,{cache:"no-store"}); if(!r.ok) throw 0;
+  const j=await r.json(); if(!j||typeof j.return!=="string") throw 0; return j.return;
+}
+async function syncOps(force){
+  if(state.opsBusy||(!force&&Date.now()-state.opsTry<(state.opsErr?60e3:OPS_TTL))) return;
+  state.opsBusy=true; state.opsTry=Date.now(); paintOps();
+  try{const [bahn,inn]=await Promise.all([opsGet("loadStateOfTraffic","traffic",5),opsGet("loadStateOfMountainInn","mountainInn",26)]);
+    state.ops={bahn,inn,at:Date.now()}; state.opsErr=false; store.set("ops",state.ops)}
+  catch(e){state.opsErr=true}
+  state.opsBusy=false; paintOps();
+}
+function paintOps(){
+  const o=opsNow(), t=o&&OPS_TXT[o.bahn];
+  $("#opsDot").className="tdot"+(t?" "+t[1]:""); $("#opsTab").setAttribute("aria-label","Bahn"+(t?": "+t[0]:""));
+  if(connected()&&current()==="betrieb") render();
+}
+function opsTile(title,v){
+  const t=OPS_TXT[v];
+  return `<div class="tile"><div class="k">${title}</div><div class="op"><span class="dot ${t?t[1]:""}"></span>${t?t[0]:state.opsBusy?"Lädt …":"Unbekannt"}</div></div>`;
+}
+function vBetrieb(){
+  const o=opsNow(), b=o&&o.bahn, i=o&&o.inn, m=new Date().getMonth()+1, now=BAHN_ZEITEN.find(r=>r[0].includes(m));
+  let msg="", cls="edge";
+  if(b==="open"&&i==="open"){msg="Bahn und Berggasthaus sind heute offen.";cls="ok"}
+  else if(b==="closed"&&i==="closed"){msg="Bahn und Berggasthaus sind heute geschlossen. Plane den Abstieg zu Fuss.";cls="over"}
+  else if(b==="closed"){msg="Die Bahn fährt heute nicht. Plane den Abstieg zu Fuss.";cls="over"}
+  else if(b==="windDependent") msg="Die Bahn fährt heute je nach Wind. Am besten vor dem Start anrufen.";
+  else if(b==="open") msg=`Die Bahn fährt heute. Das Berggasthaus ${i==="dayOfRest"?"hat Ruhetag":"ist geschlossen"}.`;
+  else if(state.opsErr) msg="Der Tagesstatus ist gerade nicht abrufbar. Unten stehen die regulären Betriebszeiten.";
+  return `${msg?`<div class="status ${cls}">${msg}</div>`:""}
+  <div class="tiles">${opsTile("Bergbahn",b)}${opsTile("Berggasthaus",i)}</div>
+  <p class="note">Tagesstatus von Appenzellerland Tourismus${o?", abgerufen um "+new Date(o.at).toLocaleTimeString("de-CH",{hour:"2-digit",minute:"2-digit"})+" Uhr":""}. Er gilt für den heutigen Tag, Angaben ohne Gewähr.${now[3]?" Im "+now[1].replace(" und "," und im ")+" lohnt sich ein Anruf.":""}</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn" href="tel:${OPS_TEL}">Anrufen · 081 757 24 24</a><button class="btn ghost" id="opsRefresh"${state.opsBusy?" disabled":""}>${state.opsBusy?"Lädt …":"Aktualisieren"}</button></div>
+  <section class="panel"><h3>Betriebszeiten der Bahn</h3>
+    <table><tbody>${BAHN_ZEITEN.map(r=>`<tr${r===now?' class="now"':""}><td>${r[1]}${r===now?' <span class="chip">jetzt</span>':""}</td><td>${r[2]}${r[3]?`<br><span class="note">${r[3]}</span>`:""}</td></tr>`).join("")}</tbody></table>
+    <p class="note">Die Bahn fährt alle 20 Minuten: zur vollen Stunde ab 3 Personen, um xx:20 und xx:40 ab 1 Person. Bei grossem Andrang fährt sie im Dauerbetrieb.</p>
+    <p class="note">Berggasthaus: Mai bis November geöffnet, April und Dezember auf telefonische Anfrage.</p></section>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn ghost" href="https://www.staubern.ch/bergbahn/" target="_blank" rel="noopener">staubern.ch</a><a class="btn ghost" href="https://www.appenzell.ch/de/alpstein/bergbahnen/bergbahn-fruemsen-staubern.html" target="_blank" rel="noopener">Appenzell Tourismus</a></div>
+  <p class="note">Betriebszeiten von staubern.ch und appenzell.ch, Stand November 2026.</p>`;
+}
+
 // ---------- Regelbasierte Analyse ----------
 let refPick=null;
 function refFor(e){
@@ -730,7 +793,7 @@ function afterConnect(res){
 }
 
 // ---------- Router ----------
-const VIEWS={uebersicht:["Übersicht",vUebersicht],aufstiege:["Aufstiege",vAufstiege],rechner:["Zielzeit",vRechner],zonen:["Zonen",vZonen]};
+const VIEWS={uebersicht:["Übersicht",vUebersicht],aufstiege:["Aufstiege",vAufstiege],rechner:["Zielzeit",vRechner],zonen:["Zonen",vZonen],betrieb:["Bahn und Gasthaus",vBetrieb]};
 const current=()=>{const h=location.hash.slice(1);return VIEWS[h]?h:"uebersicht"};
 function render(){
   if(!connected()){$("#pageTitle").textContent="Einrichten";$("#view").innerHTML=`<div class="wrap" style="max-width:none">${vSetup()}</div>`;bindSetup();
@@ -743,6 +806,7 @@ function render(){
   document.querySelectorAll("#view [data-id]").forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
   document.querySelectorAll("[data-sort]").forEach(b=>b.onclick=()=>{state.sort=b.dataset.sort;store.set("sort",state.sort);render()});
   if(v==="rechner") loadAllDetails();
+  if(v==="betrieb"){syncOps(false);$("#opsRefresh").onclick=()=>syncOps(true)}
   const ct=$("#calcT"),ce=$("#calcEco");
   if(ct){const upd=()=>{state.calcT=+ct.value;state.calcEco=+ce.value;store.set("calcT",state.calcT);store.set("calcEco",state.calcEco);
     $("#calcTv").textContent=fmt(state.calcT);$("#calcEv").textContent=state.calcEco.toFixed(2);$("#calcOut").innerHTML=calcOut(state.calcT,state.calcEco)};ct.oninput=upd;ce.oninput=upd}
@@ -753,13 +817,14 @@ $("#backdrop").onclick=closeSheet;
 $("#seasonSel").onchange=ev=>setSeason(+ev.target.value);
 $("#syncBtn").onclick=()=>connected()?openConnection():(location.hash="",render());
 document.addEventListener("keydown",ev=>{if(ev.key==="Escape")closeSheet()});
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&connected()&&(!state.syncedAt||Date.now()-state.syncedAt>10*60e3))sync(false)});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&connected()&&(!state.syncedAt||Date.now()-state.syncedAt>10*60e3))sync(false);
+  if(document.visibilityState==="visible") syncOps(false)});
 
 (async()=>{
   if(!connected()){const c=await idb.get("cfg");if(c&&c.refreshToken){cfg=c;store.set("cfg",cfg)}}
   else idb.set("cfg",JSON.parse(JSON.stringify(cfg)));
   try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
-  render(); renderSync();
+  render(); renderSync(); syncOps(false);
   const res=await finishOAuth();
   if(res) afterConnect(res);
   else if(connected()) sync(false);
