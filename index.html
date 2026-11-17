@@ -241,7 +241,8 @@ async function api(path,params={}){
   return r.json();
 }
 function isAscent(a){return /staub/i.test(a.name||"")&&(a.total_elevation_gain||0)>=1000}
-function slim(a){return {id:String(a.id),name:a.name,start:a.start_date_local,t:a.elapsed_time,mov:a.moving_time,hm:a.total_elevation_gain,km:a.distance/1000,
+// Strava vergibt ab 1.6.2027 64-Bit-IDs. Als Zahl verliert JavaScript dabei Stellen, darum zählt das Textfeld id_str.
+function slim(a){return {id:a.id_str||String(a.id),name:a.name,start:a.start_date_local,t:a.elapsed_time,mov:a.moving_time,hm:a.total_elevation_gain,km:a.distance/1000,
   hr:a.average_heartrate??null,hrMax:a.max_heartrate??null,temp:a.average_temp??null,wt:a.workout_type??null}}
 async function fetchSeason(y){
   let page=1, all=[];
